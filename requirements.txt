@@ -1,0 +1,39 @@
+# ChatVoice - Dependencies
+#
+# 1) Instala PyTorch con soporte CUDA primero.
+#    Para RTX 5090 (Blackwell/SM_120) necesitas CUDA 12.8:
+#      pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
+#
+#    Para GPUs anteriores (hasta RTX 4090 / Ada Lovelace) con CUDA 12.4:
+#      pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+#
+# 2) Luego instala el resto:
+#      pip install -r requirements.txt
+
+# ── Servidor ──────────────────────────────────────────────────────────────────
+fastapi==0.135.3
+uvicorn[standard]==0.42.0
+python-multipart==0.0.22
+pydantic==2.12.5
+
+# ── TTS / Audio ───────────────────────────────────────────────────────────────
+TTS==0.22.0
+transformers>=4.33,<4.41  # TTS 0.22.0 importa BeamSearchScorer que desapareció en 4.41+
+pygame==2.6.1
+piper-tts>=1.4.0           # Motor TTS ligero (ONNX, sin GPU requerida)
+
+# ── Compatibilidad gruut / TTS ────────────────────────────────────────────────
+# gruut 2.2.3 (dependencia de TTS) requiere estas versiones estrictas.
+# numpy 2.x y networkx 3.x rompen gruut en runtime.
+numpy>=1.19.0,<2.0.0
+networkx>=2.5.0,<3.0.0
+
+# ── Utilidades ────────────────────────────────────────────────────────────────
+requests==2.33.1
+charset-normalizer==3.4.7
+
+# ── Aplicación de escritorio ──────────────────────────────────────────────────
+pywebview>=5.0            # Ventana nativa (Edge WebView2 en Windows)
+
+# ── Build (solo para generar el ejecutable) ───────────────────────────────────
+# pyinstaller>=6.0        # Descomentar o instalar con: pip install pyinstaller

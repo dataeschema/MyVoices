@@ -1,0 +1,58 @@
+# ── Entorno virtual ───────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── PyInstaller ───────────────────────────────────────────────────────────────
+build/
+dist/
+*.spec.bak
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+*.egg
+.mypy_cache/
+.ruff_cache/
+
+# ── Datos de usuario (generados en runtime, no son código) ────────────────────
+# Voces WAV de referencia grabadas por el usuario
+voices/
+# Base de datos SQLite local
+*.db
+*.db-shm
+*.db-wal
+# Configuración legacy (migrada a SQLite en la primera ejecución)
+config.json
+
+# ── Modelos TTS descargados (~2-10 GB) ───────────────────────────────────────
+# XTTSv2 / Coqui — se descargan en ~/.local/share/tts o %APPDATA%/tts
+# Piper ONNX — se descargan a %APPDATA%/ChatVoice/piper_voices
+# No se incluyen en el repo; se documentan en README.md
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+exe_test.log
+
+# ── IDEs y editores ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── Claude Code (contexto de sesión local) ────────────────────────────────────
+.claude/
+
+# ── Sistema operativo ─────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ── Secrets / credenciales ────────────────────────────────────────────────────
+.env
+*.pem
+*.key
