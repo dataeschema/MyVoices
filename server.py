@@ -275,8 +275,14 @@ def _cuda_kernels_work() -> bool:
         torch.mm(a, a)
         torch.cuda.synchronize()
         return True
-    except RuntimeError as e:
-        _log.warning(f"CUDA incompatible: {e}")
+    except Exception as e:
+        gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "?"
+        _log.warning(
+            f"CUDA no disponible para '{gpu_name}': {e}. "
+            f"PyTorch {torch.__version__} puede no tener kernels para esta GPU. "
+            f"GPUs Blackwell (RTX 5xxx) requieren: "
+            f"pip install torch --index-url https://download.pytorch.org/whl/cu128"
+        )
         return False
 
 def _load_tts_model():
@@ -284,7 +290,7 @@ def _load_tts_model():
     cuda_ok   = torch.cuda.is_available() and _cuda_kernels_work()
     candidates = ["cuda", "cpu"] if cuda_ok else ["cpu"]
     if not cuda_ok and torch.cuda.is_available():
-        _log.warning("GPU detectada pero kernels incompatibles → usando CPU.")
+        _log.warning("GPU detectada pero kernels incompatibles → cargando en CPU.")
     for dev in candidates:
         try:
             _log.info(f"Cargando XTTSv2 en {dev}...")
