@@ -53,12 +53,14 @@ Selecciona **"Desarrollo de escritorio con C++"**.
 
 ### PyTorch con CUDA (recomendado para GPU)
 ```bash
-# RTX 5090 / Blackwell (CUDA 12.8)
+# RTX 5090 / 5080 / 5070 / 5060 — arquitectura Blackwell (SM_120/SM_121) — CUDA 12.8
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
 
-# RTX 4090 y anteriores (CUDA 12.4)
+# RTX 4090 y anteriores — CUDA 12.4
 pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
 ```
+
+> **¿Cómo sé qué versión necesito?** Si tu GPU es RTX 5xxx (Blackwell), usa cu128. Para RTX 40xx, 30xx o anteriores, usa cu124.
 
 ### Dependencias del proyecto
 ```bash
@@ -183,11 +185,21 @@ hiddenimports=[
 ```
 Luego vuelve a compilar con `build.bat`.
 
-### GPU no detectada / usa CPU
+### GPU no detectada / XTTS carga en CPU en vez de GPU
 
-- Verifica drivers NVIDIA y CUDA Toolkit actualizados
-- Comprueba que PyTorch fue instalado con soporte CUDA correcto para tu GPU
-- El modelo funciona en CPU (más lento pero estable)
+Abre el **visor de logs** en la UI (sección "Registro de actividad") y busca un mensaje `CUDA no disponible`. Las causas más comunes:
+
+**RTX 5xxx (Blackwell) con PyTorch cu124 o anterior**  
+PyTorch cu124 no incluye kernels para la arquitectura Blackwell (SM_120/SM_121). Instala la versión cu128:
+```bash
+pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
+```
+Luego vuelve a compilar con `build.bat`.
+
+**Cualquier GPU — driver o CUDA desactualizado**  
+Actualiza los drivers NVIDIA desde [nvidia.com/drivers](https://www.nvidia.com/drivers) y asegúrate de tener CUDA 12.x instalado.
+
+**Fallback garantizado:** el modelo siempre carga en CPU si la GPU no es compatible (más lento pero funcional).
 
 ### La ventana no se abre (timeout del servidor)
 
