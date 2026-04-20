@@ -49,6 +49,12 @@ _mock_numba_and_llvmlite()
 # de que torch se importe — necesario para que Windows encuentre torch_cuda.dll,
 # c10_cuda.dll y las DLLs CUDA empaquetadas con el wheel de PyTorch.
 if getattr(sys, "frozen", False):
+    # console=False → stdin/stdout/stderr son None; TTS llama input() para los ToS.
+    import io
+    if sys.stdin  is None: sys.stdin  = io.StringIO()
+    if sys.stdout is None: sys.stdout = io.StringIO()
+    if sys.stderr is None: sys.stderr = io.StringIO()
+
     _torch_lib = os.path.join(sys._MEIPASS, "torch", "lib")
     if os.path.isdir(_torch_lib):
         try:
@@ -280,7 +286,8 @@ def _load_tts_model():
     for dev in candidates:
         try:
             _log.info(f"Cargando XTTSv2 en {dev}...")
-            model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(dev)
+            model = TTS("tts_models/multilingual/multi-dataset/xtts_v2",
+                        agree_to_terms=True).to(dev)
             device = dev
             _log.info(f"Modelo XTTSv2 listo en {dev}.")
             return model, "ok"
