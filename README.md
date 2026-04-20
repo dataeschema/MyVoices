@@ -23,27 +23,31 @@ Necesario para compilar dependencias nativas de TTS.
 2. Selecciona **"Desarrollo de escritorio con C++"**
 3. Instala y reinicia si es necesario
 
-### PyTorch con CUDA (recomendado)
-
-```bash
-# RTX 5090 / Blackwell (CUDA 12.8)
-pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
-
-# RTX 4090 y anteriores (CUDA 12.4)
-pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
-```
-
 ---
 
 ## Instalación
 
 ```bash
-# Activa el entorno virtual
+# 1. Clona el repositorio
+git clone https://github.com/dataeschema/MyVoices.git
+cd MyVoices
+
+# 2. Crea un entorno virtual
+python -m venv venv
 venv\Scripts\activate
 
-# Instala dependencias (PyTorch ya debe estar instalado primero)
+# 3. Instala PyTorch con soporte CUDA (elige según tu GPU)
+#    RTX 5090 / Blackwell (CUDA 12.8):
+pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
+
+#    RTX 4090 y anteriores (CUDA 12.4):
+pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+
+# 4. Instala el resto de dependencias
 pip install -r requirements.txt
 ```
+
+> **Sin GPU**: Piper TTS funciona sin GPU. XTTSv2 es muy lento en CPU.
 
 ---
 
@@ -51,6 +55,7 @@ pip install -r requirements.txt
 
 ### Como aplicación de escritorio (recomendado)
 ```bash
+venv\Scripts\activate
 python main.py
 ```
 Arranca el servidor en background y abre una ventana nativa (Edge WebView2).  
@@ -58,6 +63,7 @@ La primera vez descarga el modelo XTTSv2 (~2 GB) — tarda varios minutos.
 
 ### Solo el servidor (para uso headless / SAMMI sin UI)
 ```bash
+venv\Scripts\activate
 python server.py
 ```
 Panel de control disponible en: `http://localhost:8000`

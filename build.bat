@@ -30,11 +30,16 @@ if exist "venv\Scripts\activate.bat" (
 )
 echo.
 
-REM Instalar pywebview
-echo Instalando pywebview...
-python -m pip install "pywebview>=5.0"
+REM Instalar dependencias del proyecto
+echo Instalando dependencias (requirements.txt)...
+echo NOTA: PyTorch debe estar instalado previamente con soporte CUDA.
+echo       Consulta el README.md si aun no lo has instalado.
+echo.
+python -m pip install -r requirements.txt
 if errorlevel 1 (
-    echo [ERROR] No se pudo instalar pywebview.
+    echo [ERROR] No se pudo instalar requirements.txt.
+    echo         Asegurate de haber instalado PyTorch con CUDA primero.
+    echo         Consulta la seccion "Requisitos previos" del README.md
     pause
     exit /b 1
 )
