@@ -39,6 +39,7 @@ venv\Scripts\activate
 # 3. Instala PyTorch con soporte CUDA (elige según tu GPU)
 #    RTX 5090 / 5080 / 5070 / 5060 — Blackwell (SM_120/SM_121) — CUDA 12.8:
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install "numpy<2.0.0" "networkx<3.0.0"   # re-fijar dependencias de gruut
 
 #    RTX 4090 y anteriores — CUDA 12.4:
 pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124

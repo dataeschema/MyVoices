@@ -190,11 +190,14 @@ Luego vuelve a compilar con `build.bat`.
 Abre el **visor de logs** en la UI (sección "Registro de actividad") y busca un mensaje `CUDA no disponible`. Las causas más comunes:
 
 **RTX 5xxx (Blackwell) con PyTorch cu124 o anterior**  
-PyTorch cu124 no incluye kernels para la arquitectura Blackwell (SM_120/SM_121). Instala la versión cu128:
+PyTorch cu124 no incluye kernels para la arquitectura Blackwell (SM_120/SM_121). Instala la versión cu128 y luego re-fija las dependencias de gruut:
 ```bash
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install "numpy<2.0.0" "networkx<3.0.0"
 ```
 Luego vuelve a compilar con `build.bat`.
+
+> **¿Por qué el segundo comando?** `--force-reinstall` puede arrastrar numpy 2.x y networkx 3.x, que rompen gruut (dependencia de TTS). El segundo comando los vuelve a fijar a las versiones compatibles.
 
 **Cualquier GPU — driver o CUDA desactualizado**  
 Actualiza los drivers NVIDIA desde [nvidia.com/drivers](https://www.nvidia.com/drivers) y asegúrate de tener CUDA 12.x instalado.
