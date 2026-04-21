@@ -796,16 +796,29 @@ async function testDownload() {
       body: JSON.stringify({ voice: preset, text }),
     });
     if (res.ok) {
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.wav`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Audio descargado', 'success');
+      const blob     = await res.blob();
+      const safeName = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.wav`;
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: safeName,
+            types: [{ description: 'Audio WAV', accept: { 'audio/wav': ['.wav'] } }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          showToast('Audio guardado', 'success');
+        } catch (err) {
+          if (err.name !== 'AbortError') throw err;
+        }
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href = url; a.download = safeName;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+        showToast('Audio descargado', 'success');
+      }
     } else {
       const e = await res.json(); showToast(e.detail || 'Error al generar audio', 'error');
     }
