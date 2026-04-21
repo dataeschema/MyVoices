@@ -402,12 +402,15 @@ async def _speak_with_preset(preset_name: str, text: str) -> dict:
     speed      = float(preset.get("speed", 1.0))
     pitch      = float(preset.get("pitch", 0.0))
     radio      = bool(preset.get("radio_effect", False))
-    language   = load_config().get("language", "es")
+    language   = preset.get("language") or "es"
 
     if engine == "piper":
         return await _synth_piper(text, filename, speaker_id, speed, pitch, radio)
     else:
         return await _synth_xtts(text, filename, speed, pitch, radio, language)
+
+
+
 
 
 async def _synth_piper(text: str, model_name: str, speaker_id: int,
@@ -530,7 +533,7 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
     speed      = float(preset.get("speed", 1.0))
     pitch      = float(preset.get("pitch", 0.0))
     radio      = bool(preset.get("radio_effect", False))
-    language   = load_config().get("language", "es")
+    language   = preset.get("language") or "es"
 
     chunks      = split_into_chunks(text)
     chunk_files: list[str] = []
@@ -839,6 +842,7 @@ async def api_save_voice_preset(
     speed:        float = Form(1.0),
     pitch:        float = Form(0.0),
     radio_effect: str   = Form("false"),
+    language:     str   = Form("es"),
 ):
     safe = _sanitize_name(name)
     if not safe:
@@ -848,7 +852,7 @@ async def api_save_voice_preset(
     speed = max(0.5, min(2.0, speed))
     pitch = max(-12.0, min(12.0, pitch))
     radio = radio_effect.lower() == "true"
-    save_voice_preset(safe, voice_id, speed, pitch, radio)
+    save_voice_preset(safe, voice_id, speed, pitch, radio, language or "es")
     return load_voice_preset(safe)
 
 
@@ -859,17 +863,19 @@ async def api_update_voice_preset(
     speed:        float = Form(None),
     pitch:        float = Form(None),
     radio_effect: str   = Form(None),
+    language:     str   = Form(None),
 ):
     preset = load_voice_preset(name)
     if not preset:
         raise HTTPException(404, f"Preset '{name}' no encontrado")
     new_vid   = voice_id     if voice_id     is not None else preset["voice_id"]
-    new_speed = max(0.5, min(2.0, speed))  if speed is not None else preset["speed"]
-    new_pitch = max(-12.0, min(12.0, pitch)) if pitch is not None else preset["pitch"]
+    new_speed = max(0.5, min(2.0, speed))    if speed        is not None else preset["speed"]
+    new_pitch = max(-12.0, min(12.0, pitch)) if pitch        is not None else preset["pitch"]
     new_radio = (radio_effect.lower() == "true") if radio_effect is not None else preset["radio_effect"]
+    new_lang  = language if language is not None else preset.get("language", "es")
     if not get_voice(new_vid):
         raise HTTPException(404, f"Voz con ID {new_vid} no encontrada")
-    save_voice_preset(name, new_vid, new_speed, new_pitch, new_radio)
+    save_voice_preset(name, new_vid, new_speed, new_pitch, new_radio, new_lang)
     return load_voice_preset(name)
 
 

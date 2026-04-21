@@ -272,26 +272,7 @@ details[open] summary::before { transform: rotate(90deg); }
     <button class="tab-btn" data-tab="xtts">🎤 XTTS2</button>
     <button class="tab-btn" data-tab="piper">🤖 Piper</button>
   </nav>
-  <div class="header-right">
-    <span style="font-size:12px;color:var(--muted)">Idioma:</span>
-    <select id="globalLang" style="width:90px" onchange="saveLanguage()">
-      <option value="es">Español</option>
-      <option value="en">English</option>
-      <option value="fr">Français</option>
-      <option value="de">Deutsch</option>
-      <option value="it">Italiano</option>
-      <option value="pt">Português</option>
-      <option value="pl">Polski</option>
-      <option value="tr">Türkçe</option>
-      <option value="ru">Русский</option>
-      <option value="nl">Nederlands</option>
-      <option value="cs">Čeština</option>
-      <option value="ar">العربية</option>
-      <option value="zh">中文</option>
-      <option value="ja">日本語</option>
-      <option value="ko">한국어</option>
-    </select>
-  </div>
+  <div class="header-right"></div>
 </header>
 
 <!-- ── Status bar ─────────────────────────────────────────────────────────── -->
@@ -344,6 +325,26 @@ details[open] summary::before { transform: rotate(90deg); }
         <label for="presetRadio">Efecto de radio</label>
       </div>
       <div class="form-row">
+        <label>Idioma <span style="color:var(--muted);font-weight:400">(solo XTTS2)</span></label>
+        <select id="presetLang">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+          <option value="pt">Português</option>
+          <option value="pl">Polski</option>
+          <option value="tr">Türkçe</option>
+          <option value="ru">Русский</option>
+          <option value="nl">Nederlands</option>
+          <option value="cs">Čeština</option>
+          <option value="ar">العربية</option>
+          <option value="zh">中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+        </select>
+      </div>
+      <div class="form-row">
         <label>Nombre del preset</label>
         <input type="text" id="presetName" placeholder="Ej: Locutor_Grave">
       </div>
@@ -356,10 +357,10 @@ details[open] summary::before { transform: rotate(90deg); }
       <div class="tbl-wrap">
         <table id="presetsTable">
           <thead><tr>
-            <th>Nombre</th><th>Voz</th><th>Motor</th><th>Vel.</th><th>Tono</th><th>Radio</th><th></th>
+            <th>Nombre</th><th>Voz</th><th>Motor</th><th>Idioma</th><th>Vel.</th><th>Tono</th><th>Radio</th><th></th>
           </tr></thead>
           <tbody id="presetsBody">
-            <tr><td colspan="7" class="empty">No hay presets guardados</td></tr>
+            <tr><td colspan="8" class="empty">No hay presets guardados</td></tr>
           </tbody>
         </table>
       </div>
@@ -573,7 +574,7 @@ let _selectedPhraseId  = null;   // currently selected phrase row
 (async () => {
   setupTabs();
   setupDragDrop();
-  await Promise.all([loadStatus(), loadConfig(), loadVoices(), loadPresets(), loadPhrases()]);
+  await Promise.all([loadStatus(), loadVoices(), loadPresets(), loadPhrases()]);
 })();
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
@@ -642,19 +643,6 @@ async function loadStatus() {
   }
 }
 
-// ── Config ─────────────────────────────────────────────────────────────────
-async function loadConfig() {
-  const cfg = await fetch('/api/config').then(r => r.json());
-  document.getElementById('globalLang').value = cfg.language || 'es';
-}
-
-async function saveLanguage() {
-  const lang = document.getElementById('globalLang').value;
-  const fd = new FormData(); fd.append('language', lang);
-  await fetch('/api/config', { method: 'POST', body: fd });
-  showToast('Idioma guardado', 'success');
-}
-
 // ── Voices ─────────────────────────────────────────────────────────────────
 async function loadVoices() {
   allVoices = await fetch('/api/voices').then(r => r.json());
@@ -698,7 +686,7 @@ async function loadPresets() {
 function renderPresets() {
   const tbody = document.getElementById('presetsBody');
   if (!allPresets.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">No hay presets guardados</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">No hay presets guardados</td></tr>';
     return;
   }
   tbody.innerHTML = allPresets.map(p => `
@@ -706,6 +694,7 @@ function renderPresets() {
       <td><strong>${esc(p.name)}</strong></td>
       <td>${esc(p.voice_name)}</td>
       <td><span class="badge badge-${p.engine}">${esc(p.engine)}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${p.engine === 'xtts' ? esc(p.language || 'es') : '—'}</td>
       <td>${p.speed.toFixed(2)}×</td>
       <td>${p.pitch > 0 ? '+' : ''}${p.pitch.toFixed(1)} st</td>
       <td>${p.radio_effect ? '📻' : '—'}</td>
@@ -736,6 +725,7 @@ async function savePreset() {
   const speed   = document.getElementById('presetSpeed').value;
   const pitch   = document.getElementById('presetPitch').value;
   const radio   = document.getElementById('presetRadio').checked;
+  const lang    = document.getElementById('presetLang').value;
 
   if (!voiceId) { showToast('Selecciona una voz', 'error'); return; }
   if (!name)    { showToast('Escribe un nombre para el preset', 'error'); return; }
@@ -744,6 +734,7 @@ async function savePreset() {
   fd.append('name', name); fd.append('voice_id', voiceId);
   fd.append('speed', speed); fd.append('pitch', pitch);
   fd.append('radio_effect', radio ? 'true' : 'false');
+  fd.append('language', lang);
 
   const res = await fetch('/api/voice-presets', { method: 'POST', body: fd });
   if (res.ok) {

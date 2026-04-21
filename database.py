@@ -129,6 +129,7 @@ def init_db() -> None:
                 speed        REAL NOT NULL DEFAULT 1.0,
                 pitch        REAL NOT NULL DEFAULT 0.0,
                 radio_effect TEXT NOT NULL DEFAULT 'false',
+                language     TEXT NOT NULL DEFAULT 'es',
                 created_at   TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -152,6 +153,15 @@ def init_db() -> None:
             db.execute(
                 "INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v)
             )
+
+    # Migration: add language column to voice_presets if it was created without it
+    try:
+        with _conn() as db:
+            db.execute(
+                "ALTER TABLE voice_presets ADD COLUMN language TEXT NOT NULL DEFAULT 'es'"
+            )
+    except sqlite3.OperationalError:
+        pass  # column already exists
 
 
 def _migrate_old_appdata() -> None:
@@ -250,7 +260,7 @@ def list_voice_presets() -> list[dict]:
         rows = db.execute(
             """SELECT vp.name, vp.voice_id, v.name AS voice_name, v.engine,
                       v.filename, v.speaker_id,
-                      vp.speed, vp.pitch, vp.radio_effect, vp.created_at
+                      vp.speed, vp.pitch, vp.radio_effect, vp.language, vp.created_at
                FROM voice_presets vp
                JOIN voices v ON v.id = vp.voice_id
                ORDER BY vp.name COLLATE NOCASE"""
@@ -259,25 +269,28 @@ def list_voice_presets() -> list[dict]:
     for r in rows:
         d = dict(r)
         d["radio_effect"] = d.get("radio_effect", "false").lower() == "true"
+        d.setdefault("language", "es")
         result.append(d)
     return result
 
 
 def save_voice_preset(name: str, voice_id: int, speed: float,
-                      pitch: float, radio_effect: bool) -> None:
+                      pitch: float, radio_effect: bool, language: str = "es") -> None:
     with _conn() as db:
         db.execute(
-            """INSERT INTO voice_presets (name, voice_id, speed, pitch, radio_effect)
-               VALUES (?, ?, ?, ?, ?)
+            """INSERT INTO voice_presets (name, voice_id, speed, pitch, radio_effect, language)
+               VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(name) DO UPDATE SET
                  voice_id     = excluded.voice_id,
                  speed        = excluded.speed,
                  pitch        = excluded.pitch,
-                 radio_effect = excluded.radio_effect""",
+                 radio_effect = excluded.radio_effect,
+                 language     = excluded.language""",
             (name, voice_id,
              round(float(speed), 2),
              round(float(pitch), 1),
-             "true" if radio_effect else "false"),
+             "true" if radio_effect else "false",
+             language or "es"),
         )
 
 
@@ -286,7 +299,7 @@ def load_voice_preset(name: str) -> dict | None:
         row = db.execute(
             """SELECT vp.name, vp.voice_id, v.name AS voice_name, v.engine,
                       v.filename, v.speaker_id,
-                      vp.speed, vp.pitch, vp.radio_effect, vp.created_at
+                      vp.speed, vp.pitch, vp.radio_effect, vp.language, vp.created_at
                FROM voice_presets vp
                JOIN voices v ON v.id = vp.voice_id
                WHERE vp.name = ?""",
@@ -296,6 +309,7 @@ def load_voice_preset(name: str) -> dict | None:
         return None
     d = dict(row)
     d["radio_effect"] = d.get("radio_effect", "false").lower() == "true"
+    d.setdefault("language", "es")
     return d
 
 
