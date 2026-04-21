@@ -185,10 +185,11 @@ def test_post_phrase_empty_name(client):
     assert r.status_code == 400
 
 
-def test_post_phrase_duplicate_name(client):
+def test_post_phrase_duplicate_name_updates(client):
     client.post("/api/phrases", data={"name": "Duplicada", "text": "Primera"})
     r = client.post("/api/phrases", data={"name": "Duplicada", "text": "Segunda"})
-    assert r.status_code == 409
+    assert r.status_code == 200
+    assert r.json()["text"] == "Segunda"
 
 
 def test_get_phrases(client):

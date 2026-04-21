@@ -332,10 +332,15 @@ def list_phrases() -> list[dict]:
 def save_phrase(name: str, text: str, voice_preset_name: str | None) -> int:
     with _conn() as db:
         cur = db.execute(
-            "INSERT INTO phrases (name, text, voice_preset_name) VALUES (?, ?, ?)",
+            """INSERT INTO phrases (name, text, voice_preset_name) VALUES (?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET
+                 text              = excluded.text,
+                 voice_preset_name = excluded.voice_preset_name""",
             (name, text, voice_preset_name or None),
         )
-        return cur.lastrowid
+        return cur.lastrowid or db.execute(
+            "SELECT id FROM phrases WHERE name = ?", (name,)
+        ).fetchone()[0]
 
 
 def update_phrase(phrase_id: int, name: str, text: str,

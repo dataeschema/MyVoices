@@ -149,10 +149,10 @@ def test_save_phrase_returns_id(tmp_db):
     assert isinstance(pid, int) and pid > 0
 
 
-def test_save_phrase_duplicate_name_raises(tmp_db):
+def test_save_phrase_duplicate_name_updates(tmp_db):
     db.save_phrase("Duplicada", "Texto 1", None)
-    with pytest.raises(sqlite3.IntegrityError):
-        db.save_phrase("Duplicada", "Texto 2", None)
+    db.save_phrase("Duplicada", "Texto 2", None)
+    assert db.get_phrase_by_name("Duplicada")["text"] == "Texto 2"
 
 
 def test_get_phrase_by_name(tmp_db):
