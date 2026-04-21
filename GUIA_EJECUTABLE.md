@@ -20,7 +20,9 @@ Cómo convertir MyVoices en un `.exe` para Windows usando **PyInstaller** y **py
 
 ```
 main.py
-  │  Arranca uvicorn en un hilo daemon
+  │  Muestra splash screen con barra de progreso
+  │  Importa server.py en hilo daemon (torch + modelo TTS)
+  │  Arranca uvicorn en hilo daemon
   │  Espera a que el servidor responda (hasta 3 min)
   └─► pywebview (Edge WebView2) ──► http://127.0.0.1:8000
                                            │
@@ -33,7 +35,12 @@ main.py
                                        └── piper_voices\
 ```
 
-**Flujo de datos de usuario** (sobreviven a actualizaciones):
+**Flujo de arranque:**
+1. `main.py` abre una ventana frameless (splash) de inmediato
+2. En background: importa `server.py` (torch + TTS model) → anima la barra de progreso
+3. Arranca uvicorn → espera respuesta → crea la ventana principal → cierra la splash
+
+**Datos de usuario** (sobreviven a actualizaciones):
 - `%APPDATA%\MyVoices\myvoices.db` — voces, presets, frases guardadas, logs de actividad
 - `%APPDATA%\MyVoices\voices\` — archivos WAV de voces clonadas (XTTS2)
 - `%APPDATA%\MyVoices\piper_voices\` — modelos Piper TTS (.onnx + .onnx.json)
@@ -69,17 +76,21 @@ El script hace todo de forma autónoma:
 
 1. Verifica que Python 3.10+ está en el PATH
 2. Crea el entorno virtual `venv` si no existe
-3. Detecta la GPU NVIDIA via `nvidia-smi`:
-   - **RTX 50xx (Blackwell)** → instala PyTorch cu128
-   - **RTX 40xx / 30xx / anteriores** → instala PyTorch cu124
-   - **Sin GPU** → muestra error (XTTSv2 requiere GPU; Piper TTS funcionará igualmente)
-4. Re-fija `numpy<2.0` y `networkx<3.0` (incompatibles con gruut si se actualizan)
+3. **Pregunta qué GPU tienes** (menú interactivo):
+   ```
+   Selecciona tu GPU:
+     [1] RTX 50xx (Blackwell)        - CUDA 12.8
+     [2] RTX 20xx / 30xx / 40xx      - CUDA 12.4  (recomendado para la mayoria)
+     [3] Sin GPU / Solo CPU
+   ```
+4. Instala PyTorch con la versión CUDA correcta
 5. Instala `requirements.txt`
-6. Instala PyInstaller ≥ 6.0
-7. Mata `MyVoices.exe` si está en ejecución
-8. Limpia builds anteriores (`dist\MyVoices\`, `build\`)
-9. Compila con `MyVoices.spec`
-10. Muestra la ruta del exe al terminar
+6. Re-fija `numpy<2.0` y `networkx<3.0` (incompatibles con gruut si se actualizan)
+7. Instala PyInstaller ≥ 6.0
+8. Mata `MyVoices.exe` si está en ejecución
+9. Limpia builds anteriores (`dist\MyVoices\`, `build\`)
+10. Compila con `MyVoices.spec`
+11. Muestra la ruta del exe al terminar
 
 ```bat
 build.bat
@@ -97,13 +108,13 @@ venv\Scripts\activate
 # 2. Instala PyTorch (elige según tu GPU)
 #    RTX 50xx (Blackwell):
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
-pip install "numpy<2.0.0" "networkx<3.0.0"
 
 #    RTX 40xx y anteriores:
-pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # 3. Instala dependencias y PyInstaller
 pip install -r requirements.txt
+pip install "numpy<2.0.0" "networkx<3.0.0"
 pip install "pyinstaller>=6.0"
 
 # 4. Limpia builds anteriores (opcional)
@@ -161,11 +172,13 @@ Name: "{autodesktop}\MyVoices"; Filename: "{app}\MyVoices.exe"
 
 1. **Windows Defender SmartScreen** puede pedir confirmación. Haz clic en **"Más información" → "Ejecutar de todas formas"**.
 
-2. La app **no muestra consola** (los logs se consultan desde el visor en la UI → sección "Registro de actividad").
+2. La app muestra una **splash screen** con barra de progreso animada mientras carga. No hay pantalla en blanco.
 
-3. Si es la primera vez, se descarga el modelo XTTSv2 (~2 GB) antes de que se abra la ventana. Tarda varios minutos según la conexión.
+3. Si es la primera vez, se descarga el modelo XTTSv2 (~2 GB) antes de que aparezca la ventana principal. Tarda varios minutos según la conexión.
 
-4. Los datos de usuario se guardan en:
+4. La app **no muestra consola** — los logs se consultan desde el visor en la UI (sección "Registro de actividad") o en `%APPDATA%\MyVoices\startup.log`.
+
+5. Los datos de usuario se guardan en:
    ```
    %APPDATA%\MyVoices\
    ├── myvoices.db        ← toda la configuración (voces, presets, frases)
@@ -173,7 +186,7 @@ Name: "{autodesktop}\MyVoices"; Filename: "{app}\MyVoices.exe"
    └── piper_voices\      ← modelos Piper descargados
    ```
 
-5. El modelo XTTSv2 se guarda en:
+6. El modelo XTTSv2 se guarda en:
    ```
    %USERPROFILE%\AppData\Local\tts\tts_models--multilingual--multi-dataset--xtts_v2\
    ```
@@ -204,24 +217,30 @@ hiddenimports=[
 ```
 Luego vuelve a compilar con `build.bat`.
 
-### GPU no detectada / XTTS carga en CPU en vez de GPU
+### XTTS carga en CPU en vez de GPU
 
-Abre el **visor de logs** en la UI (sección "Registro de actividad") y busca mensajes de CUDA. Las causas más comunes:
+Abre el **visor de logs** en la UI y busca mensajes de CUDA. Las causas más comunes:
 
-**RTX 5xxx (Blackwell) con PyTorch cu124 o anterior**  
-PyTorch cu124 no incluye kernels para la arquitectura Blackwell (SM_120/SM_121). `build.bat` lo detecta automáticamente y usa cu128. Si compilaste de forma manual, instala la versión correcta:
-```bash
-pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
-pip install "numpy<2.0.0" "networkx<3.0.0"
-```
-Luego vuelve a compilar con `build.bat`.
+**GPU incorrecta seleccionada en build.bat**  
+Vuelve a ejecutar `build.bat` y elige la opción correcta:
+- RTX 50xx → opción `1` (CUDA 12.8)
+- RTX 40xx / 30xx / 20xx → opción `2` (CUDA 12.4)
 
-> **¿Por qué el segundo comando?** `--force-reinstall` puede arrastrar numpy 2.x y networkx 3.x, que rompen gruut (dependencia de TTS). El segundo comando los vuelve a fijar a las versiones compatibles.
-
-**Cualquier GPU — driver o CUDA desactualizado**  
-Actualiza los drivers NVIDIA desde [nvidia.com/drivers](https://www.nvidia.com/drivers) y asegúrate de tener CUDA 12.x instalado.
+**Driver o CUDA desactualizado**  
+Actualiza los drivers NVIDIA desde [nvidia.com/drivers](https://www.nvidia.com/drivers).
 
 **Fallback garantizado:** el modelo siempre carga en CPU si la GPU no es compatible (más lento pero funcional). Piper TTS no requiere GPU y funciona correctamente en cualquier caso.
+
+### numpy / networkx incompatibles con gruut
+
+Síntoma: errores de importación en TTS relacionados con gruut, numpy o networkx.
+
+```bash
+venv\Scripts\activate
+pip install "numpy<2.0.0" "networkx<3.0.0"
+```
+
+`build.bat` ejecuta este paso automáticamente al final, después de instalar `requirements.txt`.
 
 ### La ventana no se abre (timeout del servidor)
 
@@ -251,8 +270,8 @@ Verifica conexión a Internet. El modelo se descarga en:
 
 ### Migración desde una versión anterior (ChatVoice)
 
-Si tenías instalada la versión anterior, MyVoices detecta automáticamente la base de datos antigua (`chatvoice.db`) y la renombra a `myvoices_backup.db`. La nueva instalación arranca con una base de datos limpia.  
-Las voces WAV y los modelos Piper **no se migran automáticamente** — cópialos manualmente desde `%APPDATA%\ChatVoice\` si los necesitas.
+Si tenías instalada la versión anterior, MyVoices detecta automáticamente la base de datos antigua y la renombra a `myvoices_backup.db`. La nueva instalación arranca con una base de datos limpia.  
+Las voces WAV del directorio `%APPDATA%\ChatVoice\voices\` se copian automáticamente a `%APPDATA%\MyVoices\voices\` en el primer arranque.
 
 ---
 

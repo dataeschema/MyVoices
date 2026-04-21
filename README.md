@@ -5,12 +5,16 @@ Aplicación de escritorio TTS para streaming. Lee texto con voces clonadas usand
 ## Características
 
 - **Dos motores TTS**: XTTSv2 (clonación de voz, alta calidad) y Piper TTS (rápido, sin GPU)
-- **Presets de voz**: combina una voz con velocidad, tono y efecto de radio y guárdala con un nombre
+- **Presets de voz**: combina una voz con velocidad, tono, idioma y efecto de radio; guárdala con un nombre
+- **Idioma por preset**: el idioma XTTS se configura por preset, no globalmente
 - **API REST simple**: solo `voice` + `text` — sin parámetros técnicos
-- **Frases guardadas**: biblioteca de textos asociados a un preset; reproducibles por nombre vía API
+- **Frases guardadas**: biblioteca de textos asociados a un preset; reproducibles por nombre vía API; guardar con un nombre ya existente actualiza la frase
+- **Descarga de audio**: genera y descarga el WAV sintetizado con diálogo nativo de guardar
 - **Efecto de radio**: bandpass 400–3400 Hz + soft clipping + ruido
-- **Panel de prueba**: selecciona un preset y escucha el resultado antes de usarlo en producción
+- **Panel de prueba**: selecciona un preset, escucha y descarga el resultado
+- **Splash screen**: barra de progreso animada durante el arranque mientras carga el modelo
 - **Visor de logs**: registro de actividad con auto-refresco, filtro por nivel y rotación automática
+- **Tests**: 71 tests unitarios e integración (DB, utils, API CRUD) ejecutables sin GPU
 
 ---
 
@@ -37,15 +41,17 @@ python -m venv venv
 venv\Scripts\activate
 
 # 3. Instala PyTorch con soporte CUDA (elige según tu GPU)
-#    RTX 5090 / 5080 / 5070 / 5060 — Blackwell (SM_120/SM_121) — CUDA 12.8:
+#    RTX 50xx (Blackwell) — CUDA 12.8:
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
-pip install "numpy<2.0.0" "networkx<3.0.0"   # re-fijar dependencias de gruut
 
-#    RTX 4090 y anteriores — CUDA 12.4:
-pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+#    RTX 40xx / 30xx / 20xx — CUDA 12.4:
+pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # 4. Instala el resto de dependencias
 pip install -r requirements.txt
+
+# 5. Re-fija numpy y networkx (requirements puede subirlas, gruut las necesita antiguas)
+pip install "numpy<2.0.0" "networkx<3.0.0"
 ```
 
 > **Sin GPU**: Piper TTS funciona sin GPU. XTTSv2 es muy lento en CPU.
@@ -59,10 +65,23 @@ venv\Scripts\activate
 python main.py
 ```
 
-Arranca el servidor en background y abre una ventana nativa (Edge WebView2).
+Al arrancar aparece una **splash screen** con barra de progreso animada mientras se carga el modelo XTTSv2. Una vez listo, se abre la ventana principal.
+
 La primera vez descarga el modelo XTTSv2 (~2 GB) — tarda varios minutos.
 
 Panel web disponible también en: `http://localhost:8000`
+
+---
+
+## Tests
+
+```bash
+venv\Scripts\activate
+pip install pytest pytest-asyncio   # solo la primera vez
+pytest -v
+```
+
+71 tests en tres suites. No requieren GPU ni modelos descargados (el servidor arranca en modo test sin cargar TTS).
 
 ---
 
@@ -70,14 +89,17 @@ Panel web disponible también en: `http://localhost:8000`
 
 `build.bat` es completamente autónomo:
 
-1. Crea el venv si no existe
-2. Detecta la GPU NVIDIA vía `nvidia-smi` y selecciona la versión CUDA adecuada
-3. Instala PyTorch, dependencias y PyInstaller automáticamente
-4. Compila el ejecutable con PyInstaller
-
 ```bat
 build.bat
 ```
+
+El script:
+1. Verifica Python 3.10+
+2. Crea el venv si no existe
+3. **Pregunta qué GPU tienes** (menú 1/2/3) y selecciona la versión CUDA adecuada
+4. Instala PyTorch, `requirements.txt` y PyInstaller automáticamente
+5. Re-fija `numpy<2.0` y `networkx<3.0` tras las dependencias
+6. Compila con PyInstaller
 
 El ejecutable final queda en `dist\MyVoices\MyVoices.exe`.
 
@@ -99,6 +121,20 @@ Content-Type: application/json
 }
 ```
 
+### Descargar audio sintetizado como WAV
+
+```
+POST http://localhost:8000/api/speak/download
+Content-Type: application/json
+
+{
+  "voice": "nombre_del_preset",
+  "text": "Texto a sintetizar"
+}
+```
+
+Devuelve el fichero WAV directamente (Content-Disposition: attachment).
+
 ### Reproducir una frase guardada
 
 ```
@@ -110,8 +146,8 @@ POST http://localhost:8000/api/phrases/{nombre}/play
 ## Flujo de uso
 
 1. **Tab XTTS2** → sube un WAV de referencia → la voz queda registrada con un ID
-2. **Tab Piper** → descarga una voz del catálogo → regístrala con un nombre
-3. **Tab Principal** → selecciona una voz, ajusta velocidad/tono/radio → guarda como preset
+2. **Tab Piper** → descarga una voz del catálogo → se registra automáticamente
+3. **Tab Principal** → selecciona una voz, ajusta velocidad/tono/idioma/radio → guarda como preset
 4. Llama a la API con `{"voice": "nombre_preset", "text": "..."}` desde SAMMI u otro sistema
 
 ---
