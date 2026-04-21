@@ -38,10 +38,16 @@ echo.
 
 REM ── 4. Detectar GPU NVIDIA ───────────────────────────────────────────────────
 echo Detectando GPU NVIDIA...
+set GPU_NAME=
 nvidia-smi --query-gpu=name --format=csv,noheader,nounits >"%TEMP%\myvoices_gpu.txt" 2>nul
-if errorlevel 1 (
+if exist "%TEMP%\myvoices_gpu.txt" (
+    set /p GPU_NAME=<"%TEMP%\myvoices_gpu.txt"
+    del "%TEMP%\myvoices_gpu.txt" >nul 2>&1
+)
+
+if "%GPU_NAME%"=="" (
     echo.
-    echo [ERROR] No se detecto ninguna GPU NVIDIA o los drivers no estan instalados.
+    echo [AVISO] No se detecto ninguna GPU NVIDIA o los drivers no estan instalados.
     echo.
     echo   Para usar XTTSv2 con GPU necesitas:
     echo     1. Una GPU NVIDIA (RTX 20xx o superior recomendado)
@@ -57,8 +63,6 @@ if errorlevel 1 (
     goto :install_torch
 )
 
-set /p GPU_NAME=<"%TEMP%\myvoices_gpu.txt"
-del "%TEMP%\myvoices_gpu.txt" >nul 2>&1
 echo GPU detectada: %GPU_NAME%
 
 REM ── 5. Determinar version CUDA segun GPU ────────────────────────────────────
