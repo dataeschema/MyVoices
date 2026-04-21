@@ -1,1259 +1,1184 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChatVoice — Panel de Control</title>
-  <style>
-    :root {
-      --bg:        #0d0d12;
-      --surface:   #16161f;
-      --surface2:  #1e1e2a;
-      --border:    #2a2a38;
-      --accent:    #7c3aed;
-      --accent-h:  #6d28d9;
-      --accent-lo: #7c3aed22;
-      --success:   #10b981;
-      --danger:    #ef4444;
-      --warn:      #f59e0b;
-      --text:      #e2e2f0;
-      --muted:     #6b6b8a;
-      --radius:    12px;
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyVoices</title>
+<style>
+:root {
+  --bg:       #080d17;
+  --surface:  #0f1729;
+  --surface2: #162033;
+  --surface3: #1c2840;
+  --border:   #1e3050;
+  --accent:   #4f7ef7;
+  --accent-h: #3b6aee;
+  --accent-lo:#4f7ef720;
+  --purple:   #7c3aed;
+  --purple-lo:#7c3aed20;
+  --success:  #22c55e;
+  --warn:     #eab308;
+  --danger:   #ef4444;
+  --text:     #e2e8f0;
+  --muted:    #5a7090;
+  --radius:   10px;
+  --radius-sm:6px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* Header */
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; gap: 12px; }
-    .logo { font-size: 18px; font-weight: 700; letter-spacing: -.5px; }
-    .logo span { color: var(--accent); }
-    .engine-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-lo); border: 1px solid var(--accent); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--accent); }
-    .status-pill { margin-left: auto; display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; font-size: 12px; color: var(--muted); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-    .dot.ok    { background: var(--success); box-shadow: 0 0 6px var(--success); }
-    .dot.error { background: var(--danger);  box-shadow: 0 0 6px var(--danger); }
+html, body { height: 100%; background: var(--bg); color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
 
-    /* Active voice banner */
-    #voiceBanner { background: var(--surface2); border-bottom: 1px solid var(--border); padding: 7px 28px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-    #voiceBanner strong { color: var(--text); }
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100%; }
 
-    /* Layout */
-    main { max-width: 1040px; margin: 0 auto; padding: 28px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
-    .full-row { grid-column: 1 / -1; }
+/* ── Header / Nav ───────────────────────────────────────────────────────── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 52px;
+  flex-shrink: 0;
+}
+.logo { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: .5px; }
+.logo span { color: var(--purple); }
 
-    /* Card */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
-    .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+nav { display: flex; gap: 4px; }
+.tab-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: 8px 14px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; transition: all .15s;
+}
+.tab-btn:hover { color: var(--text); background: var(--surface2); }
+.tab-btn.active { color: var(--accent); background: var(--accent-lo); }
 
-    /* Tabs */
-    .tabs { display: flex; gap: 4px; background: var(--bg); border-radius: 8px; padding: 4px; }
-    .tab { flex: 1; padding: 8px; text-align: center; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border: none; background: transparent; transition: all .15s; }
-    .tab.active { background: var(--surface2); color: var(--text); }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: flex; flex-direction: column; gap: 12px; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
-    /* Form */
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
-    input[type="text"], input[type="number"], textarea, select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 14px; outline: none; transition: border-color .15s; }
-    input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus { border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 80px; font-family: inherit; }
-    select option { background: var(--surface); }
-    .field { display: flex; flex-direction: column; gap: 5px; }
-    .row { display: flex; gap: 10px; align-items: flex-end; }
-    .row > * { flex: 1; }
-    hr { border: none; border-top: 1px solid var(--border); }
+/* ── Status bar ─────────────────────────────────────────────────────────── */
+#status-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 20px;
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  font-size: 12px; color: var(--muted); flex-shrink: 0;
+}
+.status-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 3px 10px;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot-ok { background: var(--success); }
+.dot-warn { background: var(--warn); }
+.dot-err { background: var(--danger); }
 
-    /* Drop zone */
-    .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 24px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; color: var(--muted); }
-    .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: var(--accent-lo); color: var(--text); }
-    .drop-zone input[type="file"] { display: none; }
-    .drop-zone .dz-icon { font-size: 26px; margin-bottom: 6px; }
-    .drop-zone .dz-label { font-size: 13px; }
-    .drop-zone .dz-sub { font-size: 11px; margin-top: 3px; }
-    .drop-zone.has-file { border-color: var(--success); background: #10b98112; color: var(--text); }
+/* ── Tab panels ─────────────────────────────────────────────────────────── */
+#content { flex: 1; overflow: hidden; }
+.tab-panel { display: none; height: 100%; overflow-y: auto; padding: 20px; }
+.tab-panel.active { display: block; }
 
-    /* Buttons */
-    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: opacity .15s, transform .1s; }
-    .btn:active { transform: scale(.97); }
-    .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
-    .btn-success { background: var(--success); color: #fff; }
-    .btn-success:hover:not(:disabled) { background: #059669; }
-    .btn-danger  { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; font-size: 12px; }
-    .btn-danger:hover:not(:disabled)  { background: #ef444418; }
-    .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-    .btn-ghost:hover:not(:disabled)   { border-color: var(--accent); color: var(--text); }
-    .btn-sm   { padding: 5px 11px; font-size: 12px; }
-    .btn-full { width: 100%; }
+/* ── Grid principal ─────────────────────────────────────────────────────── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  grid-template-rows: auto auto 1fr;
+  gap: 16px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+@media (max-width: 1100px) {
+  .main-grid { grid-template-columns: 1fr 340px; }
+}
+@media (max-width: 900px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+.full-col { grid-column: 1 / -1; }
 
-    /* Toggle */
-    .toggle-row { display: flex; align-items: center; gap: 12px; }
-    .toggle-label { flex: 1; }
-    .toggle-label strong { display: block; font-size: 13px; font-weight: 600; }
-    .toggle-label span { font-size: 12px; color: var(--muted); }
-    .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-    .toggle input { display: none; }
-    .toggle-track { position: absolute; inset: 0; border-radius: 999px; background: var(--border); cursor: pointer; transition: background .2s; }
-    .toggle input:checked + .toggle-track { background: var(--accent); }
-    .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; pointer-events: none; }
-    .toggle input:checked ~ .toggle-thumb { transform: translateX(20px); }
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+}
+.card-title {
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 6px;
+}
 
-    /* Voice lists */
-    .voice-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; padding-right: 2px; }
-    .voice-list::-webkit-scrollbar { width: 4px; }
-    .voice-list::-webkit-scrollbar-track { background: transparent; }
-    .voice-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    .voice-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; transition: border-color .15s; }
-    .voice-item.active { border-color: var(--accent); background: var(--accent-lo); }
-    .voice-item .v-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
-    .badge-active  { background: var(--accent); color: #fff; }
-    .badge-star    { background: #f59e0b22; color: var(--warn); border: 1px solid #f59e0b44; }
-    .empty-state { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0; }
+/* ── Forms ──────────────────────────────────────────────────────────────── */
+.form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.form-row label { font-size: 12px; color: var(--muted); }
+.form-row:last-child { margin-bottom: 0; }
 
-    /* Result box */
-    .result-box { padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; }
-    .result-box.ok  { background: #10b98118; border: 1px solid var(--success); color: var(--success); display: block; }
-    .result-box.err { background: #ef444418; border: 1px solid var(--danger);  color: var(--danger);  display: block; }
+input[type=text], input[type=number], select, textarea {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm);
+  padding: 7px 10px; font-size: 13px; width: 100%;
+  transition: border-color .15s;
+}
+input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+textarea { resize: vertical; min-height: 70px; }
 
-    /* Spinner */
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #ffffff44; border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+/* ── Range sliders ──────────────────────────────────────────────────────── */
+.slider-row { display: flex; align-items: center; gap: 10px; }
+.slider-row input[type=range] { flex: 1; accent-color: var(--accent); }
+.slider-val { min-width: 40px; text-align: right; color: var(--accent); font-size: 12px; font-weight: 600; }
 
-    /* Filter bar */
-    .filter-bar { display: flex; gap: 6px; }
-    .filter-bar input { flex: 1; }
-    .filter-btn { padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 12px; white-space: nowrap; }
-    .filter-btn.on { border-color: var(--warn); color: var(--warn); background: #f59e0b11; }
+/* ── Toggle ─────────────────────────────────────────────────────────────── */
+.toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.toggle-row label { font-size: 12px; color: var(--muted); }
+.toggle { position: relative; width: 38px; height: 20px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0; background: var(--surface3);
+  border-radius: 20px; cursor: pointer; transition: .2s;
+  border: 1px solid var(--border);
+}
+.toggle-slider::before {
+  content:''; position: absolute; width: 14px; height: 14px;
+  left: 2px; top: 2px; background: var(--muted);
+  border-radius: 50%; transition: .2s;
+}
+.toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(18px); background: #fff; }
 
-    /* Sliders */
-    input[type="range"] { -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px; background: var(--border); outline: none; cursor: pointer; }
-    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
-    input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: none; cursor: pointer; }
-    .speed-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+  font-size: 13px; font-weight: 500; transition: all .15s; white-space: nowrap;
+}
+.btn-primary   { background: var(--accent);   color: #fff; }
+.btn-primary:hover   { background: var(--accent-h); }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--surface3); }
+.btn-danger    { background: #ef444420; color: var(--danger); border: 1px solid #ef444440; }
+.btn-danger:hover    { background: #ef444435; }
+.btn-success   { background: #22c55e20; color: var(--success); border: 1px solid #22c55e40; }
+.btn-success:hover   { background: #22c55e35; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
 
-    /* Toast */
-    #toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; pointer-events: none; }
-    .toast { padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #fff; opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; }
-    .toast.show { opacity: 1; transform: translateY(0); }
-    .toast.green { background: var(--success); }
-    .toast.red   { background: var(--danger); }
-    .toast.blue  { background: var(--accent); }
+/* ── Tables ─────────────────────────────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .6px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
 
-    /* Presets list */
-    .preset-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
-    .preset-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
-    .preset-item .p-name { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge {
+  display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px;
+  border-radius: 20px; text-transform: uppercase;
+}
+.badge-xtts { background: var(--purple-lo); color: var(--purple); border: 1px solid var(--purple)40; }
+.badge-piper { background: var(--accent-lo); color: var(--accent); border: 1px solid var(--accent)40; }
 
-    /* Phrases table */
-    .phrase-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .phrase-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); border-bottom: 1px solid var(--border); }
-    .phrase-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    .phrase-table tr:last-child td { border-bottom: none; }
-    .phrase-table .ph-text { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-    .phrase-wrap { overflow-x: auto; }
+/* ── Editable name ──────────────────────────────────────────────────────── */
+.editable-name {
+  display: flex; align-items: center; gap: 6px;
+}
+.editable-name input {
+  width: auto; flex: 1; padding: 3px 7px; font-size: 13px;
+}
 
-    /* Log viewer */
-    .log-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: monospace; }
-    .log-table th { text-align: left; padding: 6px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); }
-    .log-table td { padding: 5px 10px; border-bottom: 1px solid var(--border)22; vertical-align: top; }
-    .log-table tr:hover td { background: var(--surface2); }
-    .log-ts  { color: var(--muted); white-space: nowrap; width: 130px; }
-    .log-lvl { white-space: nowrap; width: 70px; font-weight: 700; }
-    .log-lvl.INFO    { color: #60a5fa; }
-    .log-lvl.WARNING { color: var(--warn); }
-    .log-lvl.ERROR   { color: var(--danger); }
-    .log-lvl.DEBUG   { color: var(--muted); }
-    .log-msg { word-break: break-word; }
-    .log-wrap { max-height: 320px; overflow-y: auto; }
-    .log-wrap::-webkit-scrollbar { width: 4px; }
-    .log-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    details summary { cursor: pointer; list-style: none; }
-    details summary::-webkit-details-marker { display: none; }
+/* ── Code block ─────────────────────────────────────────────────────────── */
+.code-block {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 14px; font-family: 'Consolas', monospace; font-size: 12px;
+  color: #a5c1f0; white-space: pre; overflow-x: auto;
+}
 
-    /* Phrase edit row */
-    .ph-edit-input { width: 100%; background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; color: var(--text); padding: 5px 8px; font-size: 12px; font-family: inherit; }
-  </style>
+/* ── Log viewer ─────────────────────────────────────────────────────────── */
+details summary {
+  cursor: pointer; user-select: none;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .8px;
+  list-style: none; display: flex; align-items: center; gap: 6px;
+  padding: 10px 0;
+}
+details summary::before { content:'▶'; font-size: 10px; transition: .2s; }
+details[open] summary::before { transform: rotate(90deg); }
+.log-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.log-table-wrap { max-height: 280px; overflow-y: auto; }
+.log-level-INFO    { color: var(--text); }
+.log-level-WARNING { color: var(--warn); }
+.log-level-ERROR   { color: var(--danger); }
+
+/* ── Drag & drop zone ───────────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 32px 20px; text-align: center; color: var(--muted);
+  transition: all .2s; cursor: pointer;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-lo);
+}
+.drop-zone input[type=file] { display: none; }
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast-msg {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 16px; font-size: 13px;
+  box-shadow: 0 4px 20px #0007; opacity: 1; transition: opacity .3s;
+  min-width: 220px; max-width: 340px;
+}
+.toast-msg.fade { opacity: 0; }
+.toast-success { border-left: 3px solid var(--success); }
+.toast-error   { border-left: 3px solid var(--danger); }
+.toast-info    { border-left: 3px solid var(--accent); }
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.empty { text-align: center; color: var(--muted); padding: 30px 0; font-size: 13px; }
+
+/* ── Piper catalog filters ──────────────────────────────────────────────── */
+.filter-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-row select, .filter-row input { max-width: 180px; }
+.dl-status-done { color: var(--success); font-size: 12px; }
+.dl-status-err  { color: var(--danger);  font-size: 12px; }
+.dl-status-dl   { color: var(--warn);    font-size: 12px; }
+
+/* ── Two-col form ────────────────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ── Inline edit row ─────────────────────────────────────────────────────── */
+.edit-row { display: none; }
+.edit-row.visible { display: table-row; }
+.edit-row td { background: var(--surface2); padding: 10px; }
+</style>
 </head>
 <body>
+<div id="app">
 
-<div id="toast-container"></div>
-
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
 <header>
-  <div class="logo">Chat<span>Voice</span></div>
-  <div class="engine-pill" id="enginePill">🎭 XTTSv2</div>
-  <div class="status-pill">
-    <span class="dot" id="dot"></span>
-    <span id="status-text">Cargando...</span>
+  <div class="logo">My<span>Voices</span></div>
+  <nav>
+    <button class="tab-btn active" data-tab="main">Principal</button>
+    <button class="tab-btn" data-tab="xtts">🎤 XTTS2</button>
+    <button class="tab-btn" data-tab="piper">🤖 Piper</button>
+  </nav>
+  <div class="header-right">
+    <span style="font-size:12px;color:var(--muted)">Idioma:</span>
+    <select id="globalLang" style="width:90px" onchange="saveLanguage()">
+      <option value="es">Español</option>
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+      <option value="de">Deutsch</option>
+      <option value="it">Italiano</option>
+      <option value="pt">Português</option>
+      <option value="pl">Polski</option>
+      <option value="tr">Türkçe</option>
+      <option value="ru">Русский</option>
+      <option value="nl">Nederlands</option>
+      <option value="cs">Čeština</option>
+      <option value="ar">العربية</option>
+      <option value="zh">中文</option>
+      <option value="ja">日本語</option>
+      <option value="ko">한국어</option>
+    </select>
   </div>
 </header>
 
-<div id="voiceBanner">
-  <span>Voz activa:</span>
-  <strong id="bannerVoice">—</strong>
-  <span id="bannerEngine" style="color:var(--muted);">· xtts</span>
+<!-- ── Status bar ─────────────────────────────────────────────────────────── -->
+<div id="status-bar">
+  <div id="st-xtts" class="status-pill"><span class="dot dot-warn"></span>XTTSv2: cargando…</div>
+  <div id="st-piper" class="status-pill"><span class="dot dot-warn"></span>Piper: —</div>
+  <div id="st-voices" class="status-pill" style="color:var(--text)">Voces: —</div>
+  <div id="st-presets" class="status-pill" style="color:var(--text)">Presets: —</div>
 </div>
 
-<main>
+<!-- ── Tab Panels ─────────────────────────────────────────────────────────── -->
+<div id="content">
 
-  <!-- ── Voces ── -->
-  <div class="card full-row">
-    <div class="card-title">Gestión de Voces</div>
+<!-- ══════════════════════ TAB: PRINCIPAL ═══════════════════════════════════ -->
+<div class="tab-panel active" id="tab-main">
+<div class="main-grid">
 
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('builtin', this)">🎙 Voces Predefinidas</button>
-      <button class="tab"        onclick="switchTab('upload',  this)">⬆ Subir voz (.wav)</button>
-      <button class="tab"        onclick="switchTab('piper',   this)">🤖 Piper TTS</button>
-    </div>
+  <!-- COL IZQUIERDA -->
+  <div style="display:flex;flex-direction:column;gap:16px">
 
-    <!-- Tab: Voces predefinidas -->
-    <div class="tab-panel active" id="tab-builtin">
-      <div class="filter-bar">
-        <input type="text" id="builtinSearch" placeholder="Buscar voz..." oninput="renderBuiltin()" />
-        <button class="filter-btn" id="femaleFilter" onclick="toggleFemaleFilter()">⭐ Solo recomendadas</button>
-      </div>
-      <div class="voice-list" id="builtinList">
-        <div class="empty-state">Cargando voces predefinidas...</div>
-      </div>
-    </div>
-
-    <!-- Tab: Subir WAV -->
-    <div class="tab-panel" id="tab-upload">
-      <div class="row" style="align-items:flex-start; gap:16px; flex-wrap:wrap;">
-        <div class="field" style="flex:1; min-width:200px;">
-          <label>Archivo .wav (6-10 segundos, voz clara)</label>
-          <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-            <input type="file" id="fileInput" accept=".wav" />
-            <div class="dz-icon">🎙️</div>
-            <div class="dz-label" id="dzLabel">Haz clic o arrastra un .wav aquí</div>
-            <div class="dz-sub">Solo formato WAV</div>
-          </div>
-        </div>
-        <div class="field" style="min-width:160px;">
-          <label>Nombre de la voz</label>
-          <input type="text" id="voiceName" placeholder="Ej: mi_voz" maxlength="40" />
-          <button class="btn btn-primary" style="margin-top:8px;" onclick="uploadVoice()">
-            <span id="uploadIcon">⬆</span> Subir voz
-          </button>
-        </div>
-      </div>
-      <hr />
-      <div>
-        <label>Voces subidas</label>
-        <div class="voice-list" id="uploadedList">
-          <div class="empty-state">No hay voces subidas.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab: Piper TTS -->
-    <div class="tab-panel" id="tab-piper">
-      <div id="piperStatus" style="padding:8px 12px; border-radius:8px; font-size:12px; background:var(--bg); border:1px solid var(--border); color:var(--muted);">
-        Comprobando Piper...
-      </div>
-
-      <div>
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <label style="margin:0;">Modelos instalados</label>
-          <span id="piperDir" style="font-size:11px; color:var(--muted); font-family:monospace; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-        </div>
-        <div class="voice-list" id="piperList">
-          <div class="empty-state">Cargando...</div>
-        </div>
-      </div>
-
-      <hr />
-
-      <details style="cursor:pointer;">
-        <summary style="font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.08em; padding:4px 0;">⬆ Subir modelo local (.onnx)</summary>
-        <div style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
-          <div class="field">
-            <label>Archivo .onnx (modelo)</label>
-            <input type="file" id="piperOnnxFile" accept=".onnx"
-                   style="background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:13px;" />
-          </div>
-          <div class="field">
-            <label>Archivo .onnx.json (configuración)</label>
-            <input type="file" id="piperJsonFile" accept=".json"
-                   style="background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px; font-size:13px;" />
-          </div>
-          <button class="btn btn-ghost" style="align-self:flex-start;" onclick="uploadPiperModel()">
-            <span id="piperUploadIcon">⬆</span> Subir modelo
-          </button>
-        </div>
-      </details>
-
-      <hr />
-
-      <details style="cursor:pointer;" id="piperCatalogDetails">
-        <summary style="font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.08em; padding:4px 0;">
-          📥 Descargar voces desde HuggingFace
-        </summary>
-        <div style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <input type="text" id="piperSearchInput" placeholder="Buscar por nombre o idioma..." style="flex:1; min-width:150px;" oninput="renderCatalog()" />
-            <select id="piperLangFilter" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px 12px;" onchange="renderCatalog()">
-              <option value="">Todos los idiomas</option>
-              <option value="es">Español</option>
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <option value="it">Italiano</option>
-              <option value="pt">Português</option>
-              <option value="ca">Català</option>
-              <option value="nl">Nederlands</option>
-              <option value="pl">Polski</option>
-              <option value="ru">Русский</option>
-              <option value="zh">中文</option>
-              <option value="ja">日本語</option>
-            </select>
-            <select id="piperQualFilter" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:8px 12px;" onchange="renderCatalog()">
-              <option value="">Todas las calidades</option>
-              <option value="high">Alta</option>
-              <option value="medium">Media</option>
-              <option value="low">Baja</option>
-              <option value="x_low">Mínima</option>
-            </select>
-            <button class="btn btn-ghost btn-sm" onclick="loadCatalog(true)">🔄 Actualizar</button>
-          </div>
-          <div id="catalogStatus" style="font-size:12px; color:var(--muted);"></div>
-          <div class="voice-list" id="catalogList" style="max-height:320px;">
-            <div class="empty-state">Abre esta sección para cargar el catálogo.</div>
-          </div>
-        </div>
-      </details>
-    </div>
-  </div>
-
-  <!-- ── Probar Voz ── -->
-  <div class="card full-row">
-    <div class="card-title">Probar Voz</div>
-    <div class="row" style="flex-wrap:wrap; align-items:flex-start; gap:16px;">
-      <div class="field" style="flex:3; min-width:240px;">
-        <label>Texto a sintetizar</label>
-        <textarea id="testText" placeholder="Escribe el texto que quieres que pronuncie la voz..."></textarea>
-      </div>
-      <div class="field" style="min-width:140px;">
-        <label>Idioma</label>
-        <select id="testLang">
-          <option value="es">🇪🇸 Español</option>
-          <option value="en">🇬🇧 English</option>
-          <option value="fr">🇫🇷 Français</option>
-          <option value="de">🇩🇪 Deutsch</option>
-          <option value="it">🇮🇹 Italiano</option>
-          <option value="pt">🇧🇷 Português</option>
-          <option value="pl">🇵🇱 Polski</option>
-          <option value="tr">🇹🇷 Türkçe</option>
-          <option value="ru">🇷🇺 Русский</option>
-          <option value="nl">🇳🇱 Nederlands</option>
-          <option value="cs">🇨🇿 Čeština</option>
-          <option value="ar">🇸🇦 العربية</option>
-          <option value="zh">🇨🇳 中文</option>
-          <option value="ko">🇰🇷 한국어</option>
-          <option value="ja">🇯🇵 日本語</option>
+    <!-- Configurar preset -->
+    <div class="card">
+      <div class="card-title">⚙️ Configurar preset de voz</div>
+      <div class="form-row">
+        <label>Voz (XTTS clonada o Piper)</label>
+        <select id="presetVoice" onchange="onVoiceChange()">
+          <option value="">— selecciona una voz —</option>
         </select>
       </div>
-      <div style="display:flex; align-items:flex-end;">
-        <button class="btn btn-success" style="min-width:140px; padding:12px 20px;" id="speakBtn" onclick="testSpeak()">
-          ▶ Reproducir
-        </button>
-      </div>
-    </div>
-    <p style="font-size:12px; color:var(--muted);">Usa la configuración global activa (motor, voz, velocidad, tono, efecto de radio).</p>
-    <div class="result-box" id="speakResult"></div>
-  </div>
-
-  <!-- ── Config global ── -->
-  <div class="card">
-    <div class="card-title">Configuración Global (SAMMI)</div>
-
-    <div class="field">
-      <label>Motor TTS activo</label>
-      <div style="display:flex; gap:8px;">
-        <button id="btnEngineXtts"  class="btn btn-sm btn-primary" onclick="setEngine('xtts')">🎭 XTTSv2</button>
-        <button id="btnEnginePiper" class="btn btn-sm btn-ghost"   onclick="setEngine('piper')">🤖 Piper</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Idioma predeterminado</label>
-      <select id="cfgLang">
-        <option value="es">🇪🇸 Español</option>
-        <option value="en">🇬🇧 English</option>
-        <option value="fr">🇫🇷 Français</option>
-        <option value="de">🇩🇪 Deutsch</option>
-        <option value="it">🇮🇹 Italiano</option>
-        <option value="pt">🇧🇷 Português</option>
-        <option value="pl">🇵🇱 Polski</option>
-        <option value="tr">🇹🇷 Türkçe</option>
-        <option value="ru">🇷🇺 Русский</option>
-        <option value="nl">🇳🇱 Nederlands</option>
-        <option value="cs">🇨🇿 Čeština</option>
-        <option value="ar">🇸🇦 العربية</option>
-        <option value="zh">🇨🇳 中文</option>
-        <option value="ko">🇰🇷 한국어</option>
-        <option value="ja">🇯🇵 日本語</option>
-      </select>
-    </div>
-
-    <div class="toggle-row" style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 16px;">
-      <div class="toggle-label">
-        <strong>📻 Efecto de radio</strong>
-        <span>Bandpass 400-3400 Hz + distorsión + ruido</span>
-      </div>
-      <label class="toggle">
-        <input type="checkbox" id="cfgRadio" />
-        <div class="toggle-track"></div>
-        <div class="toggle-thumb"></div>
-      </label>
-    </div>
-
-    <div class="field" style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 16px;">
-      <label style="margin-bottom:8px;">🐇 Velocidad: <strong id="speedVal">1.0×</strong></label>
-      <input type="range" id="cfgSpeed" min="0.5" max="2.0" step="0.05" value="1.0"
-             oninput="document.getElementById('speedVal').textContent = parseFloat(this.value).toFixed(2) + '×'" />
-      <div class="speed-labels"><span>0.5×</span><span>1.0×</span><span>2.0×</span></div>
-    </div>
-
-    <div class="field" style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 16px;">
-      <label style="margin-bottom:8px;">🎵 Tono: <strong id="pitchVal">0 st</strong></label>
-      <input type="range" id="cfgPitch" min="-12" max="12" step="1" value="0"
-             oninput="updatePitchLabel(this.value)" />
-      <div class="speed-labels"><span>-12 grave</span><span>0</span><span>+12 agudo</span></div>
-    </div>
-
-    <div class="field">
-      <label>🔊 Dispositivo de audio</label>
-      <div style="display:flex; gap:8px;">
-        <select id="cfgAudioDevice" style="flex:1;"></select>
-        <button class="btn btn-ghost btn-sm" onclick="loadAudioDevices()" title="Actualizar lista">🔄</button>
-      </div>
-    </div>
-
-    <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar configuración</button>
-  </div>
-
-  <!-- ── Presets ── -->
-  <div class="card">
-    <div class="card-title">⚡ Presets</div>
-
-    <div class="preset-list" id="presetList">
-      <div class="empty-state">Sin presets guardados.</div>
-    </div>
-
-    <hr />
-
-    <div class="field">
-      <label>Guardar configuración actual como preset</label>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="presetNameInput" placeholder="Nombre del preset..." maxlength="50" style="flex:1;" />
-        <button class="btn btn-primary btn-sm" onclick="savePreset()">💾 Guardar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Frases guardadas ── -->
-  <div class="card full-row">
-    <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;">
-      <span>📝 Frases Guardadas</span>
-      <button class="btn btn-ghost btn-sm" onclick="toggleNewPhraseForm()">➕ Nueva frase</button>
-    </div>
-
-    <!-- Formulario nueva frase (oculto por defecto) -->
-    <div id="newPhraseForm" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; display:none; flex-direction:column; gap:10px;">
-      <div class="row" style="flex-wrap:wrap; gap:10px;">
-        <div class="field" style="flex:1; min-width:140px;">
-          <label>Etiqueta</label>
-          <input type="text" id="phraseLabel" placeholder="Ej: Bienvenida" maxlength="60" />
-        </div>
-        <div class="field" style="flex:1; min-width:140px;">
-          <label>Preset vinculado (opcional)</label>
-          <select id="phrasePreset">
-            <option value="">— Config global —</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label>Texto a sintetizar</label>
-        <textarea id="phraseText" placeholder="Texto que se reproducirá..." style="min-height:64px;"></textarea>
-      </div>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
-        <button class="btn btn-ghost btn-sm" onclick="toggleNewPhraseForm()">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="addPhrase()">Guardar frase</button>
-      </div>
-    </div>
-
-    <div class="phrase-wrap">
-      <table class="phrase-table" id="phraseTable">
-        <thead>
-          <tr>
-            <th style="width:44px;"></th>
-            <th>Etiqueta</th>
-            <th>Texto</th>
-            <th>Preset</th>
-            <th style="width:80px;"></th>
-          </tr>
-        </thead>
-        <tbody id="phraseBody">
-          <tr><td colspan="5" class="empty-state" style="padding:20px 10px;">Sin frases guardadas.</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- ── Integración SAMMI ── -->
-  <div class="card full-row">
-    <div class="card-title" style="display:flex; align-items:center; justify-content:space-between;">
-      <span>Integración SAMMI</span>
-      <button class="btn btn-ghost btn-sm" onclick="copySammiJson()" id="copyJsonBtn">📋 Copiar JSON</button>
-    </div>
-    <p style="color:var(--muted); font-size:13px; line-height:1.7;">POST a <code style="color:var(--accent)">http://localhost:8000/speak</code></p>
-    <div id="sammiJson" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--muted); font-family:monospace; line-height:1.8;">
-      Content-Type: application/json<br>
-      {<br>
-      &nbsp;&nbsp;"text": "Hola chat!",&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// obligatorio</span><br>
-      &nbsp;&nbsp;"engine": "piper",&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional: "xtts" | "piper"</span><br>
-      &nbsp;&nbsp;"voice_index": 2,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional, índice (ver panel)</span><br>
-      &nbsp;&nbsp;"speaker_id": 0,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional, Piper multi-speaker</span><br>
-      &nbsp;&nbsp;"language": "es",&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional (solo XTTS)</span><br>
-      &nbsp;&nbsp;"radio_effect": true,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional</span><br>
-      &nbsp;&nbsp;"speed": 1.2,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional, 0.5–2.0</span><br>
-      &nbsp;&nbsp;"pitch": -3&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#444">// opcional, semítonos -12 a +12</span><br>
-      }
-    </div>
-    <p style="font-size:12px; color:var(--muted);">
-      Los campos opcionales usan el valor de Configuración Global si se omiten. Con Piper, <code>speed</code> se aplica nativamente (mejor calidad).
-    </p>
-  </div>
-
-  <!-- ── Registro de actividad ── -->
-  <div class="card full-row">
-    <details id="logDetails">
-      <summary>
-        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none;">
-          <span class="card-title" style="display:inline;">📋 Registro de actividad</span>
-          <div style="display:flex; gap:8px; align-items:center;" onclick="event.stopPropagation()">
-            <select id="logLevelFilter" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 8px; font-size:12px;" onchange="loadLogs()">
-              <option value="">Todos</option>
-              <option value="INFO">INFO</option>
-              <option value="WARNING">WARNING</option>
-              <option value="ERROR">ERROR</option>
-            </select>
-            <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑 Limpiar</button>
+      <div class="two-col">
+        <div class="form-row">
+          <label>Velocidad</label>
+          <div class="slider-row">
+            <input type="range" id="presetSpeed" min="0.5" max="2.0" step="0.05" value="1.0"
+                   oninput="document.getElementById('speedVal').textContent=parseFloat(this.value).toFixed(2)+'×'">
+            <span class="slider-val" id="speedVal">1.00×</span>
           </div>
         </div>
-      </summary>
-
-      <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
-        <div class="log-wrap">
-          <table class="log-table">
-            <thead>
-              <tr>
-                <th class="log-ts">Timestamp</th>
-                <th class="log-lvl">Nivel</th>
-                <th class="log-msg">Mensaje</th>
-              </tr>
-            </thead>
-            <tbody id="logBody">
-              <tr><td colspan="3" class="empty-state" style="padding:14px 10px;">Sin registros.</td></tr>
-            </tbody>
-          </table>
+        <div class="form-row">
+          <label>Tono (semitonos)</label>
+          <div class="slider-row">
+            <input type="range" id="presetPitch" min="-12" max="12" step="0.5" value="0"
+                   oninput="document.getElementById('pitchVal').textContent=(this.value>0?'+':'')+parseFloat(this.value).toFixed(1)+' st'">
+            <span class="slider-val" id="pitchVal">0.0 st</span>
+          </div>
         </div>
-        <button class="btn btn-ghost btn-sm" style="align-self:flex-start;" onclick="loadLogs()">🔄 Actualizar</button>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle"><input type="checkbox" id="presetRadio"><span class="toggle-slider"></span></label>
+        <label for="presetRadio">Efecto de radio</label>
+      </div>
+      <div class="form-row">
+        <label>Nombre del preset</label>
+        <input type="text" id="presetName" placeholder="Ej: Locutor_Grave">
+      </div>
+      <button class="btn btn-primary" onclick="savePreset()">💾 Guardar preset</button>
+    </div>
+
+    <!-- Presets guardados -->
+    <div class="card">
+      <div class="card-title">📋 Presets guardados</div>
+      <div class="tbl-wrap">
+        <table id="presetsTable">
+          <thead><tr>
+            <th>Nombre</th><th>Voz</th><th>Motor</th><th>Vel.</th><th>Tono</th><th>Radio</th><th></th>
+          </tr></thead>
+          <tbody id="presetsBody">
+            <tr><td colspan="7" class="empty">No hay presets guardados</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Panel de prueba -->
+    <div class="card">
+      <div class="card-title">🎧 Panel de prueba</div>
+      <div class="form-row">
+        <label>Preset</label>
+        <select id="testPreset">
+          <option value="">— selecciona preset —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Texto</label>
+        <textarea id="testText" rows="2" placeholder="Escribe el texto a reproducir…"></textarea>
+      </div>
+      <button class="btn btn-success" id="testBtn" onclick="testSpeak()">▶ Reproducir</button>
+    </div>
+
+  </div>
+
+  <!-- COL DERECHA -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- API REST -->
+    <div class="card">
+      <div class="card-title">📡 API REST</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Envía texto con un preset de voz configurado:
+      </p>
+      <pre class="code-block" id="apiExample">{
+  "voice": "Locutor_Grave",
+  "text": "Hola chat, bienvenidos!"
+}</pre>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+        <code style="color:var(--accent)">POST http://localhost:8000/api/speak</code>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="copyApiExample()">📋 Copiar</button>
+      <hr style="border-color:var(--border);margin:14px 0">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:6px">Para reproducir una frase guardada:</p>
+      <div style="font-size:12px">
+        <code style="color:var(--accent)">POST http://localhost:8000/api/phrases/<b>{nombre}</b>/play</code>
+      </div>
+    </div>
+
+    <!-- Frases guardadas -->
+    <div class="card" style="flex:1">
+      <div class="card-title" style="justify-content:space-between">
+        <span>📝 Frases guardadas</span>
+        <button class="btn btn-secondary btn-sm" onclick="toggleAddPhrase()">+ Nueva</button>
+      </div>
+      <div id="addPhraseForm" style="display:none;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
+        <div class="form-row">
+          <label>Nombre (API usará este nombre)</label>
+          <input type="text" id="phraseNameIn" placeholder="Ej: bienvenida">
+        </div>
+        <div class="form-row">
+          <label>Texto</label>
+          <textarea id="phraseTextIn" rows="2" placeholder="Texto que se reproducirá…"></textarea>
+        </div>
+        <div class="form-row">
+          <label>Preset de voz</label>
+          <select id="phrasePreset">
+            <option value="">— sin preset —</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="addPhrase()">Guardar frase</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleAddPhrase()">Cancelar</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table id="phrasesTable">
+          <thead><tr><th>Nombre</th><th>Texto</th><th>Preset</th><th></th></tr></thead>
+          <tbody id="phrasesBody">
+            <tr><td colspan="4" class="empty">No hay frases guardadas</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Log viewer (full width) -->
+  <div class="card full-col">
+    <details id="logDetails">
+      <summary>Registro de actividad</summary>
+      <div class="log-toolbar">
+        <select id="logLevel" onchange="loadLogs()" style="width:120px">
+          <option value="">Todos</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↻ Actualizar</button>
+        <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑 Limpiar</button>
+      </div>
+      <div class="log-table-wrap">
+        <table>
+          <thead><tr><th>Tiempo</th><th>Nivel</th><th>Mensaje</th></tr></thead>
+          <tbody id="logBody"><tr><td colspan="3" class="empty">Sin registros</td></tr></tbody>
+        </table>
       </div>
     </details>
   </div>
 
-</main>
+</div><!-- /main-grid -->
+</div><!-- /tab-main -->
+
+<!-- ══════════════════════ TAB: XTTS2 ════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-xtts">
+  <div style="max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+    <!-- Subir nueva voz -->
+    <div class="card">
+      <div class="card-title">🎤 Clonar nueva voz</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
+        Sube un archivo WAV de 6–10 segundos con voz clara y sin ruido de fondo.
+        XTTSv2 usará ese audio como referencia para clonar la voz.
+      </p>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('wavFile').click()">
+        <input type="file" id="wavFile" accept=".wav" onchange="onWavSelected(this)">
+        <div id="dropLabel">📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo</div>
+      </div>
+      <div id="uploadForm" style="display:none;margin-top:14px">
+        <div class="form-row">
+          <label>Nombre de la voz</label>
+          <input type="text" id="xttsVoiceName" placeholder="Ej: Darth_Vader">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary" id="uploadBtn" onclick="uploadXttsVoice()">📤 Registrar voz</button>
+          <button class="btn btn-secondary" onclick="cancelUpload()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voces clonadas -->
+    <div class="card">
+      <div class="card-title">🗂 Voces XTTS clonadas</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Nombre</th><th>Archivo</th><th>Creada</th><th></th></tr></thead>
+          <tbody id="xttsVoicesBody">
+            <tr><td colspan="5" class="empty">No hay voces clonadas todavía</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════ TAB: PIPER ════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-piper">
+  <div style="max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+    <!-- Catálogo HuggingFace -->
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>🌐 Descargar voces (HuggingFace)</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadPiperCatalog()">↻ Cargar catálogo</button>
+      </div>
+      <div class="filter-row">
+        <select id="piperLangFilter" onchange="renderCatalog()">
+          <option value="">Todos los idiomas</option>
+        </select>
+        <select id="piperQualFilter" onchange="renderCatalog()">
+          <option value="">Todas las calidades</option>
+          <option value="x_low">x_low</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+        <input type="text" id="piperSearch" placeholder="Buscar…" style="max-width:200px" oninput="renderCatalog()">
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Nombre</th><th>Idioma</th><th>Calidad</th><th>Hab.</th><th>MB</th><th>Estado</th><th></th>
+          </tr></thead>
+          <tbody id="catalogBody">
+            <tr><td colspan="7" class="empty">Haz clic en "Cargar catálogo" para ver las voces disponibles</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Voces Piper instaladas -->
+    <div class="card">
+      <div class="card-title">🗂 Voces Piper instaladas</div>
+      <div id="piperRegisterNote" style="display:none;margin-bottom:12px;padding:10px;background:var(--surface2);border-radius:var(--radius-sm);font-size:12px;color:var(--muted)">
+        💡 Después de descargar una voz, regístrala aquí para poder usarla en presets.
+      </div>
+      <div id="piperRegisterForm" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+        <div class="form-row">
+          <label>Nombre para mostrar</label>
+          <input type="text" id="piperRegName" placeholder="Ej: Carlos_ES">
+        </div>
+        <div class="form-row">
+          <label>Modelo (archivo .onnx sin extensión)</label>
+          <input type="text" id="piperRegFilename" placeholder="Ej: es_ES-carlfm-medium">
+        </div>
+        <div class="form-row">
+          <label>Speaker ID (0 si el modelo tiene un solo hablante)</label>
+          <input type="number" id="piperRegSpeaker" value="0" min="0">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="registerPiperVoice()">Registrar</button>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('piperRegisterForm').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="btn btn-secondary btn-sm" onclick="showPiperRegisterForm()">+ Registrar voz instalada</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Nombre</th><th>Modelo</th><th>Idioma</th><th>Hab.</th><th>Creada</th><th></th></tr></thead>
+          <tbody id="piperVoicesBody">
+            <tr><td colspan="7" class="empty">No hay voces Piper registradas</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /app -->
+
+<!-- Toast container -->
+<div id="toast"></div>
 
 <script>
-  // ── Estado global ─────────────────────────────────────────────────────────
-  let allBuiltin     = [];
-  let allUploaded    = [];
-  let activeVoice    = null;
-  let activeType     = 'wav';
-  let showOnlyRec    = false;
-  let selectedFile   = null;
-  let currentEngine  = 'xtts';
-  let piperVoices    = [];
-  let piperActive    = null;
-  let piperSpeakerId = 0;
-  let catalogData    = [];
-  let allPresets     = [];
-  let allPhrases     = [];
-  let _logInterval   = null;
-  let _logAbort      = null;       // AbortController para fetch de logs en curso
-  let _editingPhrase = null;
-  const _pollIntervals = {};       // key → intervalId, para limpiar polls de descarga
+// ── State ──────────────────────────────────────────────────────────────────
+let allVoices   = [];
+let allPresets  = [];
+let allPhrases  = [];
+let catalogData = [];
+let piperVoices = [];
+let _logTimer   = null;
+let _dlPollers  = {};
 
-  // ── Toast ─────────────────────────────────────────────────────────────────
-  function showToast(msg, color = 'green') {
-    const el = document.createElement('div');
-    el.className = `toast ${color}`;
-    el.textContent = msg;
-    document.getElementById('toast-container').appendChild(el);
-    requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
-    setTimeout(() => {
-      el.classList.remove('show');
-      setTimeout(() => el.remove(), 300);
-    }, 2200);
-  }
+// ── Init ───────────────────────────────────────────────────────────────────
+(async () => {
+  setupTabs();
+  setupDragDrop();
+  await Promise.all([loadStatus(), loadConfig(), loadVoices(), loadPresets(), loadPhrases()]);
+})();
 
-  // ── Arranque ──────────────────────────────────────────────────────────────
-  async function init() {
-    // loadConfig llama loadAudioDevices internamente para garantizar el orden correcto
-    await Promise.all([loadStatus(), loadVoices(), loadPiperVoices(), loadConfig(),
-                       loadPresets(), loadPhrases()]);
-    document.getElementById('piperCatalogDetails').addEventListener('toggle', function() {
-      if (this.open && catalogData.length === 0) loadCatalog(false);
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + id).classList.add('active');
+      if (id === 'xtts') loadXttsVoices();
+      if (id === 'piper') loadPiperVoices();
     });
-    const logDetails = document.getElementById('logDetails');
-    logDetails.addEventListener('toggle', function() {
-      if (this.open) {
-        loadLogs();
-        _logInterval = setInterval(loadLogs, 5000);
-      } else {
-        clearInterval(_logInterval);
-        _logInterval = null;
-      }
-    });
-  }
-
-  // ── Status ────────────────────────────────────────────────────────────────
-  async function loadStatus() {
-    try {
-      const r = await fetch('/api/status').then(r => r.json());
-      const dot = document.getElementById('dot');
-      const txt = document.getElementById('status-text');
-      if (r.model === 'ok') {
-        dot.className = 'dot ok';
-        txt.textContent = r.gpu_name ? `Listo · ${r.gpu_name}` : 'Listo · CPU';
-      } else {
-        dot.className = 'dot error';
-        txt.textContent = 'Error al cargar modelo';
-      }
-    } catch { document.getElementById('status-text').textContent = 'Sin conexión'; }
-  }
-
-  // ── Banner voz activa ─────────────────────────────────────────────────────
-  function updateBanner() {
-    const nameEl   = document.getElementById('bannerVoice');
-    const engEl    = document.getElementById('bannerEngine');
-    const pillEl   = document.getElementById('enginePill');
-    if (currentEngine === 'piper') {
-      nameEl.textContent = piperActive || '—';
-      engEl.textContent  = '· Piper TTS';
-      pillEl.textContent = '🤖 Piper';
-    } else {
-      nameEl.textContent = activeVoice || '—';
-      engEl.textContent  = '· XTTSv2';
-      pillEl.textContent = '🎭 XTTSv2';
-    }
-  }
-
-  // ── Voces ─────────────────────────────────────────────────────────────────
-  async function loadVoices() {
-    const r = await fetch('/api/voices').then(r => r.json());
-    allBuiltin  = r.builtin  || [];
-    allUploaded = r.uploaded || [];
-    activeVoice = r.active;
-    activeType  = r.active_type || 'wav';
-    renderBuiltin();
-    renderUploaded();
-    updateBanner();
-  }
-
-  function renderBuiltin() {
-    const el     = document.getElementById('builtinList');
-    const query  = document.getElementById('builtinSearch').value.toLowerCase();
-    let voices   = allBuiltin;
-    if (showOnlyRec) voices = voices.filter(v => v.recommended);
-    if (query)       voices = voices.filter(v => v.name.toLowerCase().includes(query));
-    if (!voices.length) { el.innerHTML = '<div class="empty-state">No se encontraron voces.</div>'; return; }
-    el.innerHTML = voices.map(v => {
-      const isActive = activeVoice === v.name && activeType === 'builtin';
-      return `<div class="voice-item ${isActive ? 'active' : ''}">
-        <span class="badge" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);min-width:28px;text-align:center;font-family:monospace;">${v.index}</span>
-        <span class="v-name">${v.name}</span>
-        ${v.recommended ? '<span class="badge badge-star">⭐ recomendada</span>' : ''}
-        ${isActive      ? '<span class="badge badge-active">ACTIVA</span>' : ''}
-        <button class="btn btn-ghost btn-sm" onclick="selectBuiltin('${v.name}')" ${isActive ? 'disabled' : ''}>Usar</button>
-      </div>`;
-    }).join('');
-  }
-
-  function renderUploaded() {
-    const el = document.getElementById('uploadedList');
-    if (!allUploaded.length) { el.innerHTML = '<div class="empty-state">No hay voces subidas.</div>'; return; }
-    el.innerHTML = allUploaded.map(v => {
-      const isActive = activeVoice === v.name && activeType === 'wav';
-      return `<div class="voice-item ${isActive ? 'active' : ''}">
-        <span class="badge" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);min-width:28px;text-align:center;font-family:monospace;">${v.index}</span>
-        <span class="v-name">🎙 ${v.name}</span>
-        ${isActive ? '<span class="badge badge-active">ACTIVA</span>' : ''}
-        <button class="btn btn-ghost btn-sm" onclick="selectWav('${v.name}')" ${isActive ? 'disabled' : ''}>Usar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteVoice('${v.name}')">✕</button>
-      </div>`;
-    }).join('');
-  }
-
-  async function selectBuiltin(name) {
-    await fetch(`/api/voices/builtin/${encodeURIComponent(name)}/select`, { method: 'POST' });
-    await loadVoices();
-  }
-  async function selectWav(name) {
-    await fetch(`/api/voices/wav/${encodeURIComponent(name)}/select`, { method: 'POST' });
-    await loadVoices();
-  }
-  async function deleteVoice(name) {
-    if (!confirm(`¿Eliminar la voz "${name}"?`)) return;
-    await fetch(`/api/voices/${encodeURIComponent(name)}`, { method: 'DELETE' });
-    await loadVoices();
-  }
-  function toggleFemaleFilter() {
-    showOnlyRec = !showOnlyRec;
-    document.getElementById('femaleFilter').classList.toggle('on', showOnlyRec);
-    renderBuiltin();
-  }
-
-  // ── Upload WAV ────────────────────────────────────────────────────────────
-  const dropZone  = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
-  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault(); dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
   });
-  fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
 
-  function setFile(f) {
-    if (!f.name.toLowerCase().endsWith('.wav')) { alert('Solo .wav'); return; }
-    selectedFile = f;
-    dropZone.classList.add('has-file');
-    document.getElementById('dzLabel').textContent = `✔ ${f.name}`;
-    if (!document.getElementById('voiceName').value)
-      document.getElementById('voiceName').value = f.name.replace(/\.wav$/i, '').replace(/[^a-zA-Z0-9_\- ]/g, '');
-  }
-
-  async function uploadVoice() {
-    if (!selectedFile) { alert('Selecciona un .wav primero.'); return; }
-    const name = document.getElementById('voiceName').value.trim();
-    if (!name) { alert('Introduce un nombre.'); return; }
-    const icon = document.getElementById('uploadIcon');
-    icon.innerHTML = '<span class="spinner"></span>';
-    const fd = new FormData();
-    fd.append('file', selectedFile); fd.append('name', name);
-    try {
-      const r = await fetch('/api/voices/upload', { method: 'POST', body: fd });
-      if (!r.ok) { alert('Error: ' + (await r.json()).detail); return; }
-      selectedFile = null; fileInput.value = '';
-      dropZone.classList.remove('has-file');
-      document.getElementById('dzLabel').textContent = 'Haz clic o arrastra un .wav aquí';
-      document.getElementById('voiceName').value = '';
-      await loadVoices();
-      showToast('Voz subida correctamente');
-    } finally { icon.textContent = '⬆'; }
-  }
-
-  // ── Tabs ──────────────────────────────────────────────────────────────────
-  function switchTab(name, btn) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
-  }
-
-  // ── Test speak ────────────────────────────────────────────────────────────
-  async function testSpeak() {
-    const text = document.getElementById('testText').value.trim();
-    if (!text) { alert('Escribe un texto primero.'); return; }
-    const lang  = document.getElementById('testLang').value;
-    const radio = document.getElementById('cfgRadio').checked;
-    const btn   = document.getElementById('speakBtn');
-    const box   = document.getElementById('speakResult');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Generando...';
-    box.className = 'result-box';
-    try {
-      const r = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, language: lang, radio_effect: radio }),
-      });
-      const data = await r.json();
-      box.className = r.ok ? 'result-box ok' : 'result-box err';
-      box.textContent = r.ok ? ('✔ ' + (data.message || 'Reproduciendo...')) : ('✗ ' + (data.detail || 'Error'));
-    } catch {
-      box.className = 'result-box err';
-      box.textContent = '✗ No se pudo conectar con el servidor.';
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '▶ Reproducir';
-    }
-  }
-
-  // ── Piper ─────────────────────────────────────────────────────────────────
-  async function loadPiperVoices() {
-    const r = await fetch('/api/piper/voices').then(r => r.json());
-    piperVoices    = r.voices || [];
-    piperActive    = r.active;
-    piperSpeakerId = r.active_speaker_id ?? 0;
-    const statusEl = document.getElementById('piperStatus');
-    if (r.piper_available) {
-      statusEl.style.borderColor = 'var(--success)'; statusEl.style.color = 'var(--success)';
-      statusEl.textContent = '✓ piper-tts instalado';
+  // Log auto-refresh
+  const details = document.getElementById('logDetails');
+  details.addEventListener('toggle', () => {
+    if (details.open) {
+      loadLogs();
+      _logTimer = setInterval(loadLogs, 5000);
     } else {
-      statusEl.style.borderColor = 'var(--warn)'; statusEl.style.color = 'var(--warn)';
-      statusEl.textContent = '⚠ piper-tts no instalado — ejecuta: pip install piper-tts';
+      clearInterval(_logTimer);
     }
-    const dirEl = document.getElementById('piperDir');
-    if (r.piper_dir) dirEl.textContent = r.piper_dir;
-    renderPiper();
-    updateBanner();
-  }
+  });
+}
 
-  function renderPiper() {
-    const el = document.getElementById('piperList');
-    if (!piperVoices.length) {
-      el.innerHTML = '<div class="empty-state">No hay modelos Piper instalados.<br>Descarga uno desde HuggingFace o súbelo manualmente.</div>'; return;
-    }
-    el.innerHTML = piperVoices.map(v => {
-      const isActive  = piperActive === v.name;
-      const multiSpk  = (v.num_speakers || 1) > 1;
-      const langBadge = v.language ? `<span class="badge" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);">${v.language}</span>` : '';
-      const spkBadge  = multiSpk ? `<span class="badge" style="background:#7c3aed22;color:var(--accent);border:1px solid #7c3aed44;">${v.num_speakers} speakers</span>` : '';
-      const speakerInput = multiSpk
-        ? `<input type="number" min="0" max="${v.num_speakers-1}" value="0" id="spk_${v.name}"
-             style="width:54px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-size:12px;"
-             title="Speaker ID (0-${v.num_speakers-1})" />`
-        : '';
-      return `<div class="voice-item ${isActive ? 'active' : ''}">
-        <span class="badge" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);min-width:28px;text-align:center;font-family:monospace;">${v.index}</span>
-        <span class="v-name">🤖 ${v.name}</span>
-        ${langBadge}${spkBadge}
-        ${isActive ? '<span class="badge badge-active">ACTIVA</span>' : ''}
-        ${speakerInput}
-        <button class="btn btn-ghost btn-sm" onclick="selectPiper('${v.name}', ${multiSpk ? `parseInt(document.getElementById('spk_${v.name}').value)||0` : 0})" ${isActive ? 'disabled' : ''}>Usar</button>
-        <button class="btn btn-danger btn-sm" onclick="deletePiper('${v.name}')">✕</button>
-      </div>`;
-    }).join('');
-  }
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast-msg toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 350); }, 2500);
+}
 
-  async function selectPiper(name, spkId = 0) {
-    await fetch(`/api/piper/voices/${encodeURIComponent(name)}/select?speaker_id=${spkId}`, { method: 'POST' });
-    await loadPiperVoices();
-    currentEngine = 'piper';
-    updateEngineButtons();
-    updateBanner();
-  }
-  async function deletePiper(name) {
-    if (!confirm(`¿Eliminar el modelo Piper "${name}"?`)) return;
-    await fetch(`/api/piper/voices/${encodeURIComponent(name)}`, { method: 'DELETE' });
-    await loadPiperVoices();
-  }
-  async function uploadPiperModel() {
-    const onnxFile = document.getElementById('piperOnnxFile').files[0];
-    if (!onnxFile) { alert('Selecciona un archivo .onnx primero.'); return; }
-    const jsonFile = document.getElementById('piperJsonFile').files[0];
-    const icon = document.getElementById('piperUploadIcon');
-    icon.innerHTML = '<span class="spinner"></span>';
-    const fd = new FormData();
-    fd.append('onnx_file', onnxFile);
-    if (jsonFile) fd.append('json_file', jsonFile);
-    try {
-      const r = await fetch('/api/piper/upload', { method: 'POST', body: fd });
-      if (!r.ok) { alert('Error: ' + (await r.json()).detail); return; }
-      await loadPiperVoices();
-      showToast('Modelo Piper subido');
-    } finally { icon.textContent = '⬆'; }
-  }
+// ── Escape HTML ────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-  // ── Catálogo HuggingFace ──────────────────────────────────────────────────
-  async function loadCatalog(force = false) {
-    const statusEl  = document.getElementById('catalogStatus');
-    const listEl    = document.getElementById('catalogList');
-    statusEl.textContent = 'Cargando catálogo...';
-    listEl.innerHTML     = '<div class="empty-state"><span class="spinner" style="border-color:#ffffff44;border-top-color:var(--muted);"></span></div>';
-    const lang = document.getElementById('piperLangFilter').value;
-    const url  = '/api/piper/available' + (lang ? `?lang=${lang}` : '');
-    try {
-      const data = await fetch(url).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
-      catalogData = data;
-      statusEl.textContent = `${data.length} voces disponibles`;
-      renderCatalog();
-    } catch (e) {
-      statusEl.textContent = '✗ No se pudo conectar con HuggingFace.';
-      listEl.innerHTML = '<div class="empty-state">Error al cargar el catálogo.</div>';
-    }
-  }
+// ── Status bar ─────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/status').then(r => r.json());
+    const xttsEl = document.getElementById('st-xtts');
+    const dot = r.model === 'ok'
+      ? `<span class="dot dot-ok"></span>XTTSv2: ${r.device.toUpperCase()}${r.gpu_name ? ' · ' + r.gpu_name : ''}`
+      : `<span class="dot dot-err"></span>XTTSv2: Error`;
+    xttsEl.innerHTML = dot;
 
-  function renderCatalog() {
-    const listEl  = document.getElementById('catalogList');
-    const query   = (document.getElementById('piperSearchInput')?.value || '').toLowerCase();
-    const lang    = (document.getElementById('piperLangFilter')?.value   || '').toLowerCase();
-    const quality = (document.getElementById('piperQualFilter')?.value   || '').toLowerCase();
-    let items = catalogData;
-    if (query)   items = items.filter(v => v.name.toLowerCase().includes(query) || v.language_code.toLowerCase().includes(query) || v.language_name.toLowerCase().includes(query));
-    if (lang)    items = items.filter(v => v.language_code.toLowerCase().startsWith(lang));
-    if (quality) items = items.filter(v => v.quality === quality);
-    if (!items.length) { listEl.innerHTML = '<div class="empty-state">No se encontraron voces con estos filtros.</div>'; return; }
-    const qualColor = { high: 'var(--success)', medium: 'var(--accent)', low: 'var(--muted)', x_low: 'var(--muted)' };
-    listEl.innerHTML = items.map(v => {
-      const spkBadge = v.num_speakers > 1 ? `<span class="badge" style="background:#7c3aed22;color:var(--accent);border:1px solid #7c3aed44;">${v.num_speakers} spk</span>` : '';
-      const qcolor   = qualColor[v.quality] || 'var(--muted)';
-      let btnHtml;
-      if (v.dl_status === 'downloading') {
-        btnHtml = `<button class="btn btn-ghost btn-sm" disabled id="dlbtn_${v.key}"><span class="spinner" style="border-color:#ffffff44;border-top-color:var(--muted);"></span></button>`;
-      } else if (v.installed || v.dl_status === 'done') {
-        btnHtml = `<span class="badge" style="background:#10b98122;color:var(--success);border:1px solid #10b98144;">✓ Instalada</span>`;
-      } else {
-        btnHtml = `<button class="btn btn-ghost btn-sm" onclick="downloadVoice('${v.key}')" id="dlbtn_${v.key}">📥 Descargar</button>`;
-      }
-      return `<div class="voice-item">
-        <span class="v-name" style="font-size:12px;">${v.language_code} · <strong>${v.name}</strong></span>
-        <span class="badge" style="color:${qcolor};border:1px solid;border-color:${qcolor}44;background:${qcolor}11;">${v.quality}</span>
-        ${spkBadge}
-        <span style="font-size:11px;color:var(--muted);">${v.size_mb} MB</span>
-        ${btnHtml}
-      </div>`;
-    }).join('');
-  }
+    const piperEl = document.getElementById('st-piper');
+    piperEl.innerHTML = r.piper_available
+      ? `<span class="dot dot-ok"></span>Piper: OK`
+      : `<span class="dot dot-warn"></span>Piper: no disponible`;
 
-  async function downloadVoice(key) {
-    const btn = document.getElementById(`dlbtn_${key}`);
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="border-color:#ffffff44;border-top-color:var(--muted);"></span>'; }
-    const fd = new FormData(); fd.append('key', key);
-    await fetch('/api/piper/download', { method: 'POST', body: fd });
-    const item = catalogData.find(v => v.key === key);
-    if (item) item.dl_status = 'downloading';
-    _pollDownload(key);
+    document.getElementById('st-voices').innerHTML =
+      `🎙 Voces: ${r.voices_xtts} XTTS · ${r.voices_piper} Piper`;
+    document.getElementById('st-presets').innerHTML =
+      `⚡ Presets: ${r.presets}`;
+  } catch (e) {
+    document.getElementById('st-xtts').innerHTML = '<span class="dot dot-err"></span>Sin conexión';
   }
-  function _pollDownload(key) {
-    if (_pollIntervals[key]) clearInterval(_pollIntervals[key]);
-    _pollIntervals[key] = setInterval(async () => {
-      try {
-        const r    = await fetch(`/api/piper/download/${encodeURIComponent(key)}/status`).then(r => r.json());
-        const item = catalogData.find(v => v.key === key);
-        if (item) item.dl_status = r.status;
-        if (r.status === 'done') {
-          clearInterval(_pollIntervals[key]); delete _pollIntervals[key];
-          if (item) item.installed = true;
-          renderCatalog(); await loadPiperVoices();
-          showToast(`Modelo "${key}" descargado`);
-        } else if (r.status && r.status.startsWith('error:')) {
-          clearInterval(_pollIntervals[key]); delete _pollIntervals[key];
-          if (item) item.dl_status = 'idle';
-          renderCatalog();
-          showToast(`Error descargando "${key}"`, 'red');
-        } else { renderCatalog(); }
-      } catch { /* red de error transitoria, el poll sigue */ }
-    }, 2000);
-  }
+}
 
-  // ── Motor TTS ──────────────────────────────────────────────────────────────
-  function updateEngineButtons() {
-    const isPiper = currentEngine === 'piper';
-    document.getElementById('btnEngineXtts').className  = isPiper ? 'btn btn-sm btn-ghost'   : 'btn btn-sm btn-primary';
-    document.getElementById('btnEnginePiper').className = isPiper ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost';
-  }
+// ── Config ─────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  const cfg = await fetch('/api/config').then(r => r.json());
+  document.getElementById('globalLang').value = cfg.language || 'es';
+}
 
-  async function setEngine(eng) {
-    currentEngine = eng;
-    updateEngineButtons();
-    updateBanner();
-    const fd = new FormData();
-    fd.append('language',     document.getElementById('cfgLang').value);
-    fd.append('radio_effect', document.getElementById('cfgRadio').checked ? 'true' : 'false');
-    fd.append('speed',        document.getElementById('cfgSpeed').value);
-    fd.append('pitch',        document.getElementById('cfgPitch').value);
-    fd.append('engine',       eng);
-    fd.append('audio_device', document.getElementById('cfgAudioDevice').value);
-    await fetch('/api/config', { method: 'POST', body: fd });
-  }
+async function saveLanguage() {
+  const lang = document.getElementById('globalLang').value;
+  const fd = new FormData(); fd.append('language', lang);
+  await fetch('/api/config', { method: 'POST', body: fd });
+  showToast('Idioma guardado', 'success');
+}
 
-  // ── Audio devices ──────────────────────────────────────────────────────────
-  // selectedValue: si se pasa, se selecciona ese valor tras poblar las opciones.
-  async function loadAudioDevices(selectedValue = undefined) {
-    try {
-      const r = await fetch('/api/audio/devices').then(r => r.json());
-      const sel = document.getElementById('cfgAudioDevice');
-      sel.innerHTML = '<option value="">— Dispositivo por defecto —</option>';
-      (r.devices || []).forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d; opt.textContent = d;
-        sel.appendChild(opt);
-      });
-      sel.value = selectedValue !== undefined ? selectedValue : (r.active || '');
-    } catch {}
-  }
+// ── Voices ─────────────────────────────────────────────────────────────────
+async function loadVoices() {
+  allVoices = await fetch('/api/voices').then(r => r.json());
+  populateVoiceSelects();
+}
 
-  // ── Config ─────────────────────────────────────────────────────────────────
-  async function loadConfig() {
-    const cfg = await fetch('/api/config').then(r => r.json());
-    if (cfg.language) {
-      document.getElementById('cfgLang').value  = cfg.language;
-      document.getElementById('testLang').value = cfg.language;
-    }
-    document.getElementById('cfgRadio').checked = !!cfg.radio_effect;
-    const speed = parseFloat(cfg.speed ?? 1.0);
-    document.getElementById('cfgSpeed').value = speed;
-    document.getElementById('speedVal').textContent = speed.toFixed(2) + '×';
-    const pitch = parseFloat(cfg.pitch ?? 0.0);
-    document.getElementById('cfgPitch').value = pitch;
-    updatePitchLabel(pitch);
-    currentEngine = cfg.engine || 'xtts';
-    updateEngineButtons();
-    updateBanner();
-    // Poblar dispositivos y seleccionar el guardado en un solo paso (sin setTimeout)
-    await loadAudioDevices(cfg.audio_device || '');
+function populateVoiceSelects() {
+  const sel = document.getElementById('presetVoice');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— selecciona una voz —</option>';
+  const xtts = allVoices.filter(v => v.engine === 'xtts');
+  const piper = allVoices.filter(v => v.engine === 'piper');
+  if (xtts.length) {
+    const g = document.createElement('optgroup'); g.label = '🎤 XTTS2 (clonadas)';
+    xtts.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.id; o.textContent = `[${v.id}] ${v.name}`;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
   }
-
-  function updatePitchLabel(val) {
-    const st = parseInt(val);
-    document.getElementById('pitchVal').textContent = st === 0 ? '0 st (normal)' : (st > 0 ? `+${st} st` : `${st} st`);
+  if (piper.length) {
+    const g = document.createElement('optgroup'); g.label = '🤖 Piper';
+    piper.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.id; o.textContent = `[${v.id}] ${v.name}`;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
   }
+  if (cur) sel.value = cur;
+}
 
-  async function saveConfig() {
-    const fd = new FormData();
-    fd.append('language',     document.getElementById('cfgLang').value);
-    fd.append('radio_effect', document.getElementById('cfgRadio').checked ? 'true' : 'false');
-    fd.append('speed',        document.getElementById('cfgSpeed').value);
-    fd.append('pitch',        document.getElementById('cfgPitch').value);
-    fd.append('engine',       currentEngine);
-    fd.append('audio_device', document.getElementById('cfgAudioDevice').value);
-    const r = await fetch('/api/config', { method: 'POST', body: fd });
-    if (r.ok) {
-      showToast('✔ Configuración guardada');
-      document.getElementById('testLang').value = document.getElementById('cfgLang').value;
-    } else {
-      showToast('✗ Error al guardar', 'red');
-    }
+function onVoiceChange() {}
+
+// ── Presets ────────────────────────────────────────────────────────────────
+async function loadPresets() {
+  allPresets = await fetch('/api/voice-presets').then(r => r.json());
+  renderPresets();
+  populatePresetSelects();
+}
+
+function renderPresets() {
+  const tbody = document.getElementById('presetsBody');
+  if (!allPresets.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No hay presets guardados</td></tr>';
+    return;
   }
+  tbody.innerHTML = allPresets.map(p => `
+    <tr>
+      <td><strong>${esc(p.name)}</strong></td>
+      <td>${esc(p.voice_name)}</td>
+      <td><span class="badge badge-${p.engine}">${esc(p.engine)}</span></td>
+      <td>${p.speed.toFixed(2)}×</td>
+      <td>${p.pitch > 0 ? '+' : ''}${p.pitch.toFixed(1)} st</td>
+      <td>${p.radio_effect ? '📻' : '—'}</td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="deletePreset('${esc(p.name)}')">✕</button>
+      </td>
+    </tr>`).join('');
+}
 
-  // ── Presets ────────────────────────────────────────────────────────────────
-  async function loadPresets() {
-    allPresets = await fetch('/api/presets').then(r => r.json());
-    renderPresets();
-    _populatePresetSelects();
-  }
-
-  function renderPresets() {
-    const el = document.getElementById('presetList');
-    if (!allPresets.length) { el.innerHTML = '<div class="empty-state">Sin presets guardados.</div>'; return; }
-    el.innerHTML = allPresets.map(p => {
-      const eng  = p.engine === 'piper' ? '🤖' : '🎭';
-      const voz  = p.engine === 'piper' ? (p.piper_voice || '—') : (p.voice || '—');
-      return `<div class="preset-item">
-        <span>${eng}</span>
-        <span class="p-name" title="${p.name}">${p.name}</span>
-        <span class="badge" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);font-size:10px;">${voz}</span>
-        <span style="font-size:11px;color:var(--muted);">${p.speed}× / ${p.pitch > 0 ? '+' : ''}${p.pitch}st</span>
-        <button class="btn btn-ghost btn-sm" onclick="applyPreset('${p.name}')">Aplicar</button>
-        <button class="btn btn-danger btn-sm" onclick="deletePreset('${p.name}')">✕</button>
-      </div>`;
-    }).join('');
-  }
-
-  function _populatePresetSelects() {
-    const sel = document.getElementById('phrasePreset');
+function populatePresetSelects() {
+  ['testPreset', 'phrasePreset'].forEach(id => {
+    const sel = document.getElementById(id);
     if (!sel) return;
     const cur = sel.value;
-    sel.innerHTML = '<option value="">— Config global —</option>';
+    sel.innerHTML = id === 'phrasePreset'
+      ? '<option value="">— sin preset —</option>'
+      : '<option value="">— selecciona preset —</option>';
     allPresets.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.name; opt.textContent = p.name;
-      sel.appendChild(opt);
+      const o = document.createElement('option');
+      o.value = p.name; o.textContent = p.name;
+      sel.appendChild(o);
     });
-    sel.value = cur;
-  }
+    if (cur) sel.value = cur;
+  });
+}
 
-  async function savePreset() {
-    const name = document.getElementById('presetNameInput').value.trim();
-    if (!name) { showToast('Escribe un nombre para el preset', 'red'); return; }
-    const fd = new FormData();
-    fd.append('name', name);
-    const r = await fetch('/api/presets', { method: 'POST', body: fd });
-    if (r.ok) {
-      document.getElementById('presetNameInput').value = '';
-      await loadPresets();
-      showToast(`Preset "${name}" guardado`);
-    } else {
-      showToast('Error al guardar preset', 'red');
-    }
-  }
+async function savePreset() {
+  const voiceId = document.getElementById('presetVoice').value;
+  const name    = document.getElementById('presetName').value.trim();
+  const speed   = document.getElementById('presetSpeed').value;
+  const pitch   = document.getElementById('presetPitch').value;
+  const radio   = document.getElementById('presetRadio').checked;
 
-  async function applyPreset(name) {
-    const r = await fetch(`/api/presets/${encodeURIComponent(name)}/apply`, { method: 'POST' });
-    if (r.ok) {
-      const cfg = await r.json();
-      await loadConfig();
-      await loadVoices();
-      await loadPiperVoices();
-      showToast(`Preset "${name}" aplicado`);
-    } else {
-      showToast('Error al aplicar preset', 'red');
-    }
-  }
+  if (!voiceId) { showToast('Selecciona una voz', 'error'); return; }
+  if (!name)    { showToast('Escribe un nombre para el preset', 'error'); return; }
 
-  async function deletePreset(name) {
-    if (!confirm(`¿Eliminar el preset "${name}"?`)) return;
-    await fetch(`/api/presets/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  const fd = new FormData();
+  fd.append('name', name); fd.append('voice_id', voiceId);
+  fd.append('speed', speed); fd.append('pitch', pitch);
+  fd.append('radio_effect', radio ? 'true' : 'false');
+
+  const res = await fetch('/api/voice-presets', { method: 'POST', body: fd });
+  if (res.ok) {
+    showToast(`Preset "${name}" guardado`, 'success');
+    document.getElementById('presetName').value = '';
     await loadPresets();
-    showToast(`Preset "${name}" eliminado`, 'blue');
+    await loadStatus();
+  } else {
+    const err = await res.json();
+    showToast(err.detail || 'Error al guardar', 'error');
   }
+}
 
-  // ── Frases guardadas ───────────────────────────────────────────────────────
-  async function loadPhrases() {
-    allPhrases = await fetch('/api/phrases').then(r => r.json());
-    renderPhrases();
+async function deletePreset(name) {
+  if (!confirm(`¿Eliminar preset "${name}"?`)) return;
+  const res = await fetch(`/api/voice-presets/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast(`Preset "${name}" eliminado`, 'info');
+    await loadPresets();
+    await loadStatus();
   }
+}
 
-  function renderPhrases() {
-    const tbody = document.getElementById('phraseBody');
-    if (!allPhrases.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="padding:20px 10px;">Sin frases guardadas.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = allPhrases.map(p => {
-      if (_editingPhrase === p.id) return renderPhraseEditRow(p);
-      const preset = p.preset_name
-        ? `<span class="badge" style="background:var(--accent-lo);color:var(--accent);border:1px solid #7c3aed44;">${p.preset_name}</span>`
-        : '<span style="color:var(--muted);font-size:12px;">global</span>';
-      return `<tr id="phrase-row-${p.id}">
-        <td><button class="btn btn-success btn-sm" onclick="playPhrase(${p.id}, this)" title="Reproducir">▶</button></td>
-        <td style="font-weight:500;">${escHtml(p.label)}</td>
-        <td class="ph-text" title="${escHtml(p.text)}">${escHtml(p.text)}</td>
-        <td>${preset}</td>
-        <td style="display:flex;gap:4px;">
-          <button class="btn btn-ghost btn-sm" onclick="startEditPhrase(${p.id})" title="Editar">✏</button>
-          <button class="btn btn-danger btn-sm" onclick="deletePhrase(${p.id})" title="Eliminar">✕</button>
-        </td>
-      </tr>`;
-    }).join('');
-  }
+// ── Test speak ─────────────────────────────────────────────────────────────
+async function testSpeak() {
+  const preset = document.getElementById('testPreset').value;
+  const text   = document.getElementById('testText').value.trim();
+  if (!preset) { showToast('Selecciona un preset', 'error'); return; }
+  if (!text)   { showToast('Escribe un texto', 'error'); return; }
 
-  function renderPhraseEditRow(p) {
-    const presetOpts = ['<option value="">— global —</option>',
-      ...allPresets.map(pr => `<option value="${escHtml(pr.name)}" ${p.preset_name === pr.name ? 'selected' : ''}>${escHtml(pr.name)}</option>`)
-    ].join('');
-    return `<tr id="phrase-row-${p.id}" style="background:var(--surface2);">
-      <td></td>
-      <td><input class="ph-edit-input" id="edit-label-${p.id}" value="${escHtml(p.label)}" /></td>
-      <td><textarea class="ph-edit-input" id="edit-text-${p.id}" rows="2">${escHtml(p.text)}</textarea></td>
-      <td><select class="ph-edit-input" id="edit-preset-${p.id}" style="padding:4px 6px;">${presetOpts}</select></td>
-      <td style="display:flex;gap:4px;">
-        <button class="btn btn-primary btn-sm" onclick="saveEditPhrase(${p.id})">✔</button>
-        <button class="btn btn-ghost btn-sm" onclick="cancelEditPhrase()">✕</button>
-      </td>
-    </tr>`;
+  const btn = document.getElementById('testBtn');
+  btn.disabled = true; btn.textContent = '⌛ Sintetizando…';
+  try {
+    const res = await fetch('/api/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voice: preset, text }),
+    });
+    if (res.ok) showToast('Reproduciendo…', 'success');
+    else { const e = await res.json(); showToast(e.detail || 'Error', 'error'); }
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Reproducir';
   }
+}
 
-  function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// ── API Example ────────────────────────────────────────────────────────────
+function copyApiExample() {
+  const preset = allPresets[0]?.name || 'nombre_preset';
+  const obj = { voice: preset, text: 'Hola chat, bienvenidos!' };
+  navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
+  showToast('JSON copiado', 'success');
+}
 
-  function toggleNewPhraseForm() {
-    const f = document.getElementById('newPhraseForm');
-    const isHidden = f.style.display === 'none' || !f.style.display;
-    f.style.display = isHidden ? 'flex' : 'none';
-    if (isHidden) { _populatePresetSelects(); document.getElementById('phraseLabel').focus(); }
-  }
+// ── Phrases ────────────────────────────────────────────────────────────────
+async function loadPhrases() {
+  allPhrases = await fetch('/api/phrases').then(r => r.json());
+  renderPhrases();
+}
 
-  async function addPhrase() {
-    const label = document.getElementById('phraseLabel').value.trim();
-    const text  = document.getElementById('phraseText').value.trim();
-    const preset = document.getElementById('phrasePreset').value;
-    if (!label || !text) { showToast('Label y texto son obligatorios', 'red'); return; }
-    const fd = new FormData();
-    fd.append('label', label); fd.append('text', text);
-    if (preset) fd.append('preset_name', preset);
-    const r = await fetch('/api/phrases', { method: 'POST', body: fd });
-    if (r.ok) {
-      document.getElementById('phraseLabel').value = '';
-      document.getElementById('phraseText').value  = '';
-      document.getElementById('phrasePreset').value = '';
-      document.getElementById('newPhraseForm').style.display = 'none';
-      await loadPhrases();
-      showToast('Frase guardada');
-    } else { showToast('Error al guardar frase', 'red'); }
+function renderPhrases() {
+  const tbody = document.getElementById('phrasesBody');
+  if (!allPhrases.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">No hay frases guardadas</td></tr>';
+    return;
   }
+  tbody.innerHTML = allPhrases.map(p => `
+    <tr>
+      <td><code style="color:var(--accent)">${esc(p.name)}</code></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          title="${esc(p.text)}">${esc(p.text)}</td>
+      <td>${p.voice_preset_name ? `<span class="badge badge-xtts">${esc(p.voice_preset_name)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deletePhrase(${p.id})">✕</button></td>
+    </tr>`).join('');
+}
 
-  async function playPhrase(id, btn) {
-    const prev = btn.textContent;
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
-    try {
-      const r = await fetch(`/api/phrases/${id}/play`, { method: 'POST' });
-      if (!r.ok) showToast('Error al reproducir', 'red');
-    } finally { btn.disabled = false; btn.textContent = prev; }
-  }
+function toggleAddPhrase() {
+  const f = document.getElementById('addPhraseForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
 
-  function startEditPhrase(id) {
-    _editingPhrase = id;
-    renderPhrases();
-  }
-  function cancelEditPhrase() {
-    _editingPhrase = null;
-    renderPhrases();
-  }
-  async function saveEditPhrase(id) {
-    const label  = document.getElementById(`edit-label-${id}`).value.trim();
-    const text   = document.getElementById(`edit-text-${id}`).value.trim();
-    const preset = document.getElementById(`edit-preset-${id}`).value;
-    if (!label || !text) { showToast('Label y texto son obligatorios', 'red'); return; }
-    const fd = new FormData();
-    fd.append('label', label); fd.append('text', text);
-    if (preset) fd.append('preset_name', preset);
-    const r = await fetch(`/api/phrases/${id}`, { method: 'PUT', body: fd });
-    if (r.ok) {
-      _editingPhrase = null;
-      await loadPhrases();
-      showToast('Frase actualizada');
-    } else { showToast('Error al actualizar', 'red'); }
-  }
-  async function deletePhrase(id) {
-    if (!confirm('¿Eliminar esta frase?')) return;
-    await fetch(`/api/phrases/${id}`, { method: 'DELETE' });
+async function addPhrase() {
+  const name   = document.getElementById('phraseNameIn').value.trim();
+  const text   = document.getElementById('phraseTextIn').value.trim();
+  const preset = document.getElementById('phrasePreset').value || null;
+  if (!name || !text) { showToast('Nombre y texto son obligatorios', 'error'); return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('text', text);
+  if (preset) fd.append('voice_preset_name', preset);
+  const res = await fetch('/api/phrases', { method: 'POST', body: fd });
+  if (res.ok) {
+    showToast('Frase guardada', 'success');
+    document.getElementById('phraseNameIn').value = '';
+    document.getElementById('phraseTextIn').value = '';
+    toggleAddPhrase();
     await loadPhrases();
-    showToast('Frase eliminada', 'blue');
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error', 'error');
+  }
+}
+
+async function deletePhrase(id) {
+  if (!confirm('¿Eliminar esta frase?')) return;
+  await fetch(`/api/phrases/${id}`, { method: 'DELETE' });
+  showToast('Frase eliminada', 'info');
+  await loadPhrases();
+}
+
+// ── Logs ───────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  const level = document.getElementById('logLevel').value;
+  const url   = '/api/logs?limit=200' + (level ? '&level=' + level : '');
+  const rows  = await fetch(url).then(r => r.json());
+  const tbody = document.getElementById('logBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin registros</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r =>
+    `<tr>
+      <td style="white-space:nowrap;color:var(--muted);font-size:11px">${esc(r.ts)}</td>
+      <td><span class="log-level-${r.level}" style="font-size:11px;font-weight:600">${r.level}</span></td>
+      <td style="font-size:12px;word-break:break-all">${esc(r.message)}</td>
+    </tr>`).join('');
+}
+
+async function clearLogs() {
+  if (!confirm('¿Limpiar todos los logs?')) return;
+  await fetch('/api/logs', { method: 'DELETE' });
+  loadLogs();
+  showToast('Logs limpiados', 'info');
+}
+
+// ── XTTS tab ───────────────────────────────────────────────────────────────
+function setupDragDrop() {
+  const zone = document.getElementById('dropZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) handleWavFile(f);
+  });
+}
+
+function onWavSelected(input) {
+  if (input.files[0]) handleWavFile(input.files[0]);
+}
+
+function handleWavFile(file) {
+  if (!file.name.toLowerCase().endsWith('.wav')) {
+    showToast('Solo se aceptan archivos .wav', 'error'); return;
+  }
+  document.getElementById('dropLabel').textContent = '📄 ' + file.name;
+  const name = file.name.replace(/\.wav$/i, '').replace(/[^a-zA-Z0-9_\- ]/g, '');
+  document.getElementById('xttsVoiceName').value = name;
+  document.getElementById('uploadForm').style.display = 'block';
+}
+
+function cancelUpload() {
+  document.getElementById('dropLabel').textContent = '📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo';
+  document.getElementById('uploadForm').style.display = 'none';
+  document.getElementById('wavFile').value = '';
+}
+
+async function uploadXttsVoice() {
+  const file = document.getElementById('wavFile').files[0];
+  const name = document.getElementById('xttsVoiceName').value.trim();
+  if (!file) { showToast('Selecciona un archivo WAV', 'error'); return; }
+  if (!name) { showToast('Escribe un nombre para la voz', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', file); fd.append('name', name);
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true; btn.textContent = 'Subiendo…';
+  const res = await fetch('/api/voices/xtts', { method: 'POST', body: fd });
+  btn.disabled = false; btn.textContent = '📤 Registrar voz';
+  if (res.ok) {
+    const v = await res.json();
+    showToast(`Voz "${v.name}" registrada (ID ${v.id})`, 'success');
+    cancelUpload();
+    await loadXttsVoices();
+    await loadVoices();
+    await loadStatus();
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error al subir', 'error');
+  }
+}
+
+async function loadXttsVoices() {
+  const voices = await fetch('/api/voices?engine=xtts').then(r => r.json());
+  const tbody  = document.getElementById('xttsVoicesBody');
+  if (!voices.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay voces clonadas todavía</td></tr>';
+    return;
+  }
+  tbody.innerHTML = voices.map(v => `
+    <tr id="xtts-row-${v.id}">
+      <td style="color:var(--muted)">${v.id}</td>
+      <td>
+        <div class="editable-name">
+          <input type="text" value="${esc(v.name)}" id="xtts-name-${v.id}" style="width:160px">
+          <button class="btn btn-secondary btn-sm" onclick="renameVoice(${v.id},'xtts')">✎</button>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${esc(v.filename)}</td>
+      <td style="color:var(--muted);font-size:11px">${v.created_at ? v.created_at.slice(0,10) : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteVoice(${v.id})">🗑</button></td>
+    </tr>`).join('');
+}
+
+async function renameVoice(id, engine) {
+  const input = document.getElementById(`${engine}-name-${id}`);
+  const name  = input.value.trim();
+  if (!name) { showToast('El nombre no puede estar vacío', 'error'); return; }
+  const fd = new FormData(); fd.append('name', name);
+  const res = await fetch(`/api/voices/${id}`, { method: 'PUT', body: fd });
+  if (res.ok) {
+    showToast('Nombre actualizado', 'success');
+    await loadVoices();
+    if (engine === 'xtts') await loadXttsVoices();
+    else await loadPiperVoices();
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error', 'error');
+  }
+}
+
+async function deleteVoice(id) {
+  if (!confirm('¿Eliminar esta voz? Los presets que la usen también se eliminarán.')) return;
+  const res = await fetch(`/api/voices/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast('Voz eliminada', 'info');
+    await loadVoices(); await loadPresets(); await loadStatus();
+    await loadXttsVoices();
+  }
+}
+
+// ── Piper tab ──────────────────────────────────────────────────────────────
+async function loadPiperVoices() {
+  piperVoices = await fetch('/api/piper/voices').then(r => r.json());
+  renderPiperVoices();
+}
+
+function renderPiperVoices() {
+  const tbody = document.getElementById('piperVoicesBody');
+  if (!piperVoices.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No hay voces Piper registradas</td></tr>';
+    document.getElementById('piperRegisterNote').style.display = 'block';
+    return;
+  }
+  document.getElementById('piperRegisterNote').style.display = 'none';
+  tbody.innerHTML = piperVoices.map(v => `
+    <tr id="piper-row-${v.id}">
+      <td style="color:var(--muted)">${v.id}</td>
+      <td>
+        <div class="editable-name">
+          <input type="text" value="${esc(v.name)}" id="piper-name-${v.id}" style="width:150px">
+          <button class="btn btn-secondary btn-sm" onclick="renameVoice(${v.id},'piper')">✎</button>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${esc(v.filename || '')}</td>
+      <td style="font-size:12px">${esc(v.language || '—')}</td>
+      <td style="font-size:12px">${v.num_speakers ?? 1}</td>
+      <td style="color:var(--muted);font-size:11px">${v.created_at ? v.created_at.slice(0,10) : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deletePiperVoice(${v.id})">🗑</button></td>
+    </tr>`).join('');
+}
+
+async function deletePiperVoice(id) {
+  if (!confirm('¿Eliminar esta voz Piper y su archivo .onnx?')) return;
+  const res = await fetch(`/api/piper/voices/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast('Voz Piper eliminada', 'info');
+    await loadPiperVoices(); await loadVoices(); await loadStatus();
+  }
+}
+
+function showPiperRegisterForm() {
+  document.getElementById('piperRegisterForm').style.display = 'block';
+}
+
+async function registerPiperVoice() {
+  const name     = document.getElementById('piperRegName').value.trim();
+  const filename = document.getElementById('piperRegFilename').value.trim();
+  const speaker  = document.getElementById('piperRegSpeaker').value;
+  if (!name || !filename) { showToast('Nombre y archivo son obligatorios', 'error'); return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('filename', filename); fd.append('speaker_id', speaker);
+  const res = await fetch('/api/piper/register', { method: 'POST', body: fd });
+  if (res.ok) {
+    const v = await res.json();
+    showToast(`Voz "${v.name}" registrada (ID ${v.id})`, 'success');
+    document.getElementById('piperRegisterForm').style.display = 'none';
+    await loadPiperVoices(); await loadVoices(); await loadStatus();
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error', 'error');
+  }
+}
+
+// ── Piper catalog ──────────────────────────────────────────────────────────
+async function loadPiperCatalog() {
+  document.getElementById('catalogBody').innerHTML =
+    '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">⌛ Cargando catálogo desde HuggingFace…</td></tr>';
+  try {
+    catalogData = await fetch('/api/piper/available').then(r => r.json());
+    // Populate language filter
+    const langs = [...new Set(catalogData.map(v => v.language_code))].sort();
+    const sel   = document.getElementById('piperLangFilter');
+    sel.innerHTML = '<option value="">Todos los idiomas</option>';
+    langs.forEach(l => {
+      const o = document.createElement('option'); o.value = l; o.textContent = l;
+      sel.appendChild(o);
+    });
+    renderCatalog();
+  } catch (e) {
+    document.getElementById('catalogBody').innerHTML =
+      `<tr><td colspan="7" class="empty">Error cargando catálogo: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderCatalog() {
+  const lang  = document.getElementById('piperLangFilter').value;
+  const qual  = document.getElementById('piperQualFilter').value;
+  const query = document.getElementById('piperSearch').value.toLowerCase();
+  const tbody = document.getElementById('catalogBody');
+
+  const filtered = catalogData.filter(v =>
+    (!lang  || v.language_code.startsWith(lang)) &&
+    (!qual  || v.quality === qual) &&
+    (!query || v.name.toLowerCase().includes(query) || v.language_name.toLowerCase().includes(query))
+  );
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Sin resultados</td></tr>';
+    return;
   }
 
-  // ── Logs ───────────────────────────────────────────────────────────────────
-  async function loadLogs() {
-    if (_logAbort) _logAbort.abort();
-    _logAbort = new AbortController();
-    const level = document.getElementById('logLevelFilter').value;
-    const url   = `/api/logs?limit=200${level ? '&level=' + level : ''}`;
-    try {
-      const rows  = await fetch(url, { signal: _logAbort.signal }).then(r => r.json());
-      const tbody = document.getElementById('logBody');
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="3" class="empty-state" style="padding:14px 10px;">Sin registros.</td></tr>'; return;
-      }
-      tbody.innerHTML = rows.map(r => `<tr>
-        <td class="log-ts">${r.ts}</td>
-        <td class="log-lvl ${r.level}">${r.level}</td>
-        <td class="log-msg">${escHtml(r.message)}</td>
-      </tr>`).join('');
-    } catch (e) {
-      if (e.name !== 'AbortError') console.error('loadLogs:', e);
+  tbody.innerHTML = filtered.map(v => {
+    let action = '';
+    const st   = v.dl_status;
+    if (v.installed || st === 'done') {
+      action = '<span class="dl-status-done">✅ Instalada</span>';
+    } else if (st === 'downloading') {
+      action = '<span class="dl-status-dl">⌛ Descargando…</span>';
+    } else if (st && st.startsWith('error')) {
+      action = `<span class="dl-status-err">✗ Error</span>
+        <button class="btn btn-secondary btn-sm" onclick="downloadPiper('${esc(v.key)}')">↺</button>`;
+    } else {
+      action = `<button class="btn btn-primary btn-sm" onclick="downloadPiper('${esc(v.key)}')">⬇ Descargar</button>`;
     }
-  }
+    return `<tr>
+      <td>${esc(v.name)}</td>
+      <td style="font-size:12px">${esc(v.language_name)} (${esc(v.language_code)})</td>
+      <td style="font-size:12px">${esc(v.quality)}</td>
+      <td style="font-size:12px">${v.num_speakers}</td>
+      <td style="font-size:12px;color:var(--muted)">${v.size_mb} MB</td>
+      <td id="dl-st-${esc(v.key.replace(/[^a-z0-9]/gi,'_'))}">${action}</td>
+      <td>${action.includes('Instalada') ?
+        `<button class="btn btn-secondary btn-sm" onclick="showPiperRegisterFormPrefilled('${esc(v.key)}')">+ Registrar</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+}
 
-  async function clearLogs() {
-    if (!confirm('¿Limpiar todos los registros de actividad?')) return;
-    await fetch('/api/logs', { method: 'DELETE' });
-    await loadLogs();
-    showToast('Logs eliminados', 'blue');
+async function downloadPiper(key) {
+  const fd = new FormData(); fd.append('key', key);
+  const res = await fetch('/api/piper/download', { method: 'POST', body: fd });
+  if (res.ok) {
+    showToast('Descarga iniciada…', 'info');
+    pollDownload(key);
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error', 'error');
   }
+}
 
-  // ── SAMMI copy ─────────────────────────────────────────────────────────────
-  function copySammiJson() {
-    const json = `{\n  "text": "Hola chat!",\n  "engine": "xtts",\n  "language": "es",\n  "radio_effect": false,\n  "speed": 1.0,\n  "pitch": 0\n}`;
-    navigator.clipboard.writeText(json).then(() => showToast('JSON copiado al portapapeles'));
-  }
+function pollDownload(key) {
+  const safeKey = key.replace(/[^a-z0-9]/gi, '_');
+  if (_dlPollers[key]) clearInterval(_dlPollers[key]);
+  _dlPollers[key] = setInterval(async () => {
+    const st = await fetch(`/api/piper/download/${encodeURIComponent(key)}/status`)
+      .then(r => r.json());
+    const el = document.getElementById(`dl-st-${safeKey}`);
+    if (st.status === 'done') {
+      clearInterval(_dlPollers[key]);
+      if (el) el.innerHTML = '<span class="dl-status-done">✅ Instalada</span>';
+      showToast('Descarga completada. Regístrala para usarla.', 'success');
+      await loadPiperCatalog();
+    } else if (st.status && st.status.startsWith('error')) {
+      clearInterval(_dlPollers[key]);
+      if (el) el.innerHTML = `<span class="dl-status-err">✗ Error</span>
+        <button class="btn btn-secondary btn-sm" onclick="downloadPiper('${esc(key)}')">↺</button>`;
+    }
+  }, 2000);
+}
 
-  init();
+function showPiperRegisterFormPrefilled(key) {
+  const namePart = key.split('/').pop() || key;
+  document.getElementById('piperRegName').value     = namePart.replace(/[^a-zA-Z0-9_]/g,'_');
+  document.getElementById('piperRegFilename').value = namePart;
+  document.getElementById('piperRegSpeaker').value  = '0';
+  showPiperRegisterForm();
+  document.getElementById('piperRegisterForm').scrollIntoView({ behavior: 'smooth' });
+}
 </script>
 </body>
 </html>

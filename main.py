@@ -1,11 +1,11 @@
 """
-ChatVoice Desktop — Punto de entrada.
+MyVoices Desktop — Punto de entrada.
 
 Arranca uvicorn en un hilo daemon, espera a que responda y abre
 una ventana nativa con pywebview (Edge WebView2 en Windows).
 
 Con console=False todo output estándar se pierde; los errores se
-capturan en %APPDATA%\ChatVoice\startup.log y se muestran en un
+capturan en %APPDATA%\MyVoices\startup.log y se muestran en un
 MessageBox si hay un crash fatal.
 """
 import os
@@ -18,14 +18,14 @@ import traceback
 # ── Log de arranque ───────────────────────────────────────────────────────────
 
 def _get_log_dir() -> str:
-    """Devuelve %APPDATA%\\ChatVoice, con fallback junto al exe."""
+    """Devuelve %APPDATA%\\MyVoices, con fallback junto al exe."""
     try:
         if sys.platform == "win32":
             base = os.environ.get("APPDATA", os.path.expanduser("~"))
         else:
             base = os.environ.get("XDG_DATA_HOME",
                                    os.path.join(os.path.expanduser("~"), ".local", "share"))
-        d = os.path.join(base, "ChatVoice")
+        d = os.path.join(base, "MyVoices")
         os.makedirs(d, exist_ok=True)
         return d
     except Exception:
@@ -56,7 +56,7 @@ def _show_error(msg: str) -> None:
     """Muestra un MessageBox de error (Windows, sin consola disponible)."""
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(0, msg, "ChatVoice — Error de inicio", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, msg, "MyVoices — Error de inicio", 0x10)
     except Exception:
         pass
 
@@ -132,7 +132,7 @@ def main() -> None:
     import webview
 
     webview.create_window(
-        title="ChatVoice",
+        title="MyVoices",
         url="http://127.0.0.1:8000",
         width=1100,
         height=760,
@@ -159,7 +159,7 @@ if __name__ == "__main__":
         tb = traceback.format_exc()
         _log(f"CRASH FATAL:\n{tb}")
         _show_error(
-            f"ChatVoice encontró un error fatal al arrancar:\n\n"
+            f"MyVoices encontró un error fatal al arrancar:\n\n"
             f"{tb[:900]}\n\n"
             f"Log completo en:\n{_log_path}"
         )

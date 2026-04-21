@@ -1,6 +1,6 @@
-# ChatVoice — Guía para generar el ejecutable de escritorio
+# MyVoices — Guía para generar el ejecutable de escritorio
 
-Cómo convertir ChatVoice en un `.exe` para Windows usando **PyInstaller** y **pywebview**.
+Cómo convertir MyVoices en un `.exe` para Windows usando **PyInstaller** y **pywebview**.
 
 ---
 
@@ -27,16 +27,16 @@ main.py
                                      server.py (FastAPI)
                                            │
                                      database.py (SQLite)
-                                     %APPDATA%\ChatVoice\
-                                       ├── chatvoice.db
+                                     %APPDATA%\MyVoices\
+                                       ├── myvoices.db
                                        ├── voices\
                                        └── piper_voices\
 ```
 
 **Flujo de datos de usuario** (sobreviven a actualizaciones):
-- `%APPDATA%\ChatVoice\chatvoice.db` — config, presets, frases guardadas, logs de actividad
-- `%APPDATA%\ChatVoice\voices\` — archivos WAV de voces clonadas
-- `%APPDATA%\ChatVoice\piper_voices\` — modelos Piper TTS
+- `%APPDATA%\MyVoices\myvoices.db` — voces, presets, frases guardadas, logs de actividad
+- `%APPDATA%\MyVoices\voices\` — archivos WAV de voces clonadas (XTTS2)
+- `%APPDATA%\MyVoices\piper_voices\` — modelos Piper TTS (.onnx + .onnx.json)
 
 ---
 
@@ -51,25 +51,11 @@ python --version  # debe mostrar 3.10.x o superior
 Necesario para dependencias nativas. Descarga: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).  
 Selecciona **"Desarrollo de escritorio con C++"**.
 
-### PyTorch con CUDA (recomendado para GPU)
-```bash
-# RTX 5090 / 5080 / 5070 / 5060 — arquitectura Blackwell (SM_120/SM_121) — CUDA 12.8
-pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
-
-# RTX 4090 y anteriores — CUDA 12.4
-pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
-```
-
-> **¿Cómo sé qué versión necesito?** Si tu GPU es RTX 5xxx (Blackwell), usa cu128. Para RTX 40xx, 30xx o anteriores, usa cu124.
-
-### Dependencias del proyecto
-```bash
-pip install -r requirements.txt
-```
-
 ### Edge WebView2 Runtime (equipo destino)
 Incluido en Windows 10 (v1803+) y Windows 11 por defecto.  
 Si falta: [Microsoft Edge WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+
+> **PyTorch, CUDA y las demás dependencias las instala automáticamente `build.bat`** — no necesitas instalarlas a mano.
 
 ---
 
@@ -77,29 +63,54 @@ Si falta: [Microsoft Edge WebView2](https://developer.microsoft.com/en-us/micros
 
 ### Opción A — Script automático (recomendado)
 
-Haz doble clic en `build.bat` desde la carpeta del proyecto.
+Haz doble clic en `build.bat` desde la carpeta del proyecto (o ejecútalo desde terminal).
 
-El script:
-1. Activa el entorno virtual `venv` si existe
-2. Instala `pywebview` y `pyinstaller` si no están
-3. Limpia builds anteriores
-4. Ejecuta `pyinstaller ChatVoice.spec --noconfirm`
-5. Muestra la ruta del exe al terminar
+El script hace todo de forma autónoma:
+
+1. Verifica que Python 3.10+ está en el PATH
+2. Crea el entorno virtual `venv` si no existe
+3. Detecta la GPU NVIDIA via `nvidia-smi`:
+   - **RTX 50xx (Blackwell)** → instala PyTorch cu128
+   - **RTX 40xx / 30xx / anteriores** → instala PyTorch cu124
+   - **Sin GPU** → muestra error (XTTSv2 requiere GPU; Piper TTS funcionará igualmente)
+4. Re-fija `numpy<2.0` y `networkx<3.0` (incompatibles con gruut si se actualizan)
+5. Instala `requirements.txt`
+6. Instala PyInstaller ≥ 6.0
+7. Mata `MyVoices.exe` si está en ejecución
+8. Limpia builds anteriores (`dist\MyVoices\`, `build\`)
+9. Compila con `MyVoices.spec`
+10. Muestra la ruta del exe al terminar
+
+```bat
+build.bat
+```
+
+El ejecutable final queda en: `dist\MyVoices\MyVoices.exe`
 
 ### Opción B — Manual
 
 ```bash
-# 1. Activa el entorno virtual
+# 1. Crea y activa el entorno virtual
+python -m venv venv
 venv\Scripts\activate
 
-# 2. Instala dependencias de build
-pip install "pywebview>=5.0" "pyinstaller>=6.0"
+# 2. Instala PyTorch (elige según tu GPU)
+#    RTX 50xx (Blackwell):
+pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install "numpy<2.0.0" "networkx<3.0.0"
 
-# 3. Limpia (opcional)
-rmdir /s /q dist\ChatVoice build
+#    RTX 40xx y anteriores:
+pip install torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
 
-# 4. Compila
-pyinstaller ChatVoice.spec --noconfirm
+# 3. Instala dependencias y PyInstaller
+pip install -r requirements.txt
+pip install "pyinstaller>=6.0"
+
+# 4. Limpia builds anteriores (opcional)
+rmdir /s /q dist\MyVoices build
+
+# 5. Compila
+pyinstaller MyVoices.spec --noconfirm
 ```
 
 ---
@@ -107,8 +118,8 @@ pyinstaller ChatVoice.spec --noconfirm
 ## 4. Estructura del bundle
 
 ```
-dist\ChatVoice\
-├── ChatVoice.exe          ← doble clic para abrir
+dist\MyVoices\
+├── MyVoices.exe          ← doble clic para abrir
 └── _internal\
     ├── static\
     │   └── index.html     ← interfaz web empaquetada
@@ -119,29 +130,29 @@ dist\ChatVoice\
     └── ...
 ```
 
-> **Importante:** Para mover o distribuir la app, copia **toda la carpeta `dist\ChatVoice\`**, nunca solo el `.exe`.
+> **Importante:** Para mover o distribuir la app, copia **toda la carpeta `dist\MyVoices\`**, nunca solo el `.exe`.
 
 ---
 
 ## 5. Distribución
 
-1. Copia la carpeta completa `dist\ChatVoice\` al equipo destino
+1. Copia la carpeta completa `dist\MyVoices\` al equipo destino
 2. En la primera ejecución el equipo necesita Internet para descargar el modelo XTTSv2 (~2 GB)
-3. Las voces Piper y las voces WAV clonadas se guardan en `%APPDATA%\ChatVoice\` y persisten entre versiones
+3. Las voces Piper y las voces WAV clonadas se guardan en `%APPDATA%\MyVoices\` y persisten entre versiones
 
 ### Instalador con Inno Setup (opcional)
 
 ```iss
 [Setup]
-AppName=ChatVoice
+AppName=MyVoices
 AppVersion=2.0
-DefaultDirName={autopf}\ChatVoice
+DefaultDirName={autopf}\MyVoices
 
 [Files]
-Source: "dist\ChatVoice\*"; DestDir: "{app}"; Flags: recursesubdirs
+Source: "dist\MyVoices\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [Icons]
-Name: "{autodesktop}\ChatVoice"; Filename: "{app}\ChatVoice.exe"
+Name: "{autodesktop}\MyVoices"; Filename: "{app}\MyVoices.exe"
 ```
 
 ---
@@ -156,10 +167,15 @@ Name: "{autodesktop}\ChatVoice"; Filename: "{app}\ChatVoice.exe"
 
 4. Los datos de usuario se guardan en:
    ```
-   %APPDATA%\ChatVoice\
-   ├── chatvoice.db       ← toda la configuración (incluye presets y frases)
-   ├── voices\            ← archivos WAV subidos
+   %APPDATA%\MyVoices\
+   ├── myvoices.db        ← toda la configuración (voces, presets, frases)
+   ├── voices\            ← archivos WAV subidos (XTTS2)
    └── piper_voices\      ← modelos Piper descargados
+   ```
+
+5. El modelo XTTSv2 se guarda en:
+   ```
+   %USERPROFILE%\AppData\Local\tts\tts_models--multilingual--multi-dataset--xtts_v2\
    ```
 
 ---
@@ -168,15 +184,18 @@ Name: "{autodesktop}\ChatVoice"; Filename: "{app}\ChatVoice.exe"
 
 ### El exe cierra inmediatamente / pantalla en blanco
 
-Ejecuta desde terminal para ver el error:
-```bash
-dist\ChatVoice\ChatVoice.exe
+El log de inicio se guarda automáticamente en:
 ```
-Los errores de inicio también aparecen en el **visor de logs** si el servidor arrancó parcialmente.
+%APPDATA%\MyVoices\startup.log
+```
+Ábrelo con cualquier editor de texto para ver el error exacto. También puedes ejecutar desde terminal para ver mensajes:
+```bash
+dist\MyVoices\MyVoices.exe
+```
 
 ### "No module named 'xxx'"
 
-Añade el módulo a `hiddenimports` en `ChatVoice.spec`:
+Añade el módulo a `hiddenimports` en `MyVoices.spec`:
 ```python
 hiddenimports=[
     ...
@@ -187,10 +206,10 @@ Luego vuelve a compilar con `build.bat`.
 
 ### GPU no detectada / XTTS carga en CPU en vez de GPU
 
-Abre el **visor de logs** en la UI (sección "Registro de actividad") y busca un mensaje `CUDA no disponible`. Las causas más comunes:
+Abre el **visor de logs** en la UI (sección "Registro de actividad") y busca mensajes de CUDA. Las causas más comunes:
 
 **RTX 5xxx (Blackwell) con PyTorch cu124 o anterior**  
-PyTorch cu124 no incluye kernels para la arquitectura Blackwell (SM_120/SM_121). Instala la versión cu128 y luego re-fija las dependencias de gruut:
+PyTorch cu124 no incluye kernels para la arquitectura Blackwell (SM_120/SM_121). `build.bat` lo detecta automáticamente y usa cu128. Si compilaste de forma manual, instala la versión correcta:
 ```bash
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install "numpy<2.0.0" "networkx<3.0.0"
@@ -202,11 +221,11 @@ Luego vuelve a compilar con `build.bat`.
 **Cualquier GPU — driver o CUDA desactualizado**  
 Actualiza los drivers NVIDIA desde [nvidia.com/drivers](https://www.nvidia.com/drivers) y asegúrate de tener CUDA 12.x instalado.
 
-**Fallback garantizado:** el modelo siempre carga en CPU si la GPU no es compatible (más lento pero funcional).
+**Fallback garantizado:** el modelo siempre carga en CPU si la GPU no es compatible (más lento pero funcional). Piper TTS no requiere GPU y funciona correctamente en cualquier caso.
 
 ### La ventana no se abre (timeout del servidor)
 
-El servidor tardó más de 3 minutos (puede ocurrir en equipos lentos o la primera vez).
+El servidor tardó más de 3 minutos. Puede ocurrir en la primera ejecución (descarga del modelo) o en equipos lentos.  
 Edita `main.py` y aumenta el timeout:
 ```python
 if not _wait_for_server(status_url, timeout=300.0):  # 5 minutos
@@ -218,10 +237,10 @@ Luego recompila con `build.bat`.
 Instala el runtime desde:  
 https://developer.microsoft.com/en-us/microsoft-edge/webview2/
 
-### PyTorch falla en el build
+### PyTorch falla en el build manual
 
 PyTorch debe estar instalado **en el mismo entorno** que PyInstaller.  
-Si usas `venv`, actívalo antes de compilar.
+Usa `build.bat` para que todo se haga en el mismo venv automáticamente.
 
 ### El modelo XTTSv2 no se descarga
 
@@ -230,11 +249,17 @@ Verifica conexión a Internet. El modelo se descarga en:
 %USERPROFILE%\AppData\Local\tts\tts_models--multilingual--multi-dataset--xtts_v2\
 ```
 
+### Migración desde una versión anterior (ChatVoice)
+
+Si tenías instalada la versión anterior, MyVoices detecta automáticamente la base de datos antigua (`chatvoice.db`) y la renombra a `myvoices_backup.db`. La nueva instalación arranca con una base de datos limpia.  
+Las voces WAV y los modelos Piper **no se migran automáticamente** — cópialos manualmente desde `%APPDATA%\ChatVoice\` si los necesitas.
+
 ---
 
 ## Notas
 
 - **Tamaño del bundle:** ~5-8 GB (principalmente PyTorch + TTS)
-- **Sin consola visible:** `console=False` en `ChatVoice.spec`. Los logs se consultan desde la UI.
-- **Actualizar sin recompilar:** Para cambios en `static/index.html`, reemplaza el archivo en `dist\ChatVoice\_internal\static\`. Para cambios en Python, hay que recompilar.
+- **Sin consola visible:** `console=False` en `MyVoices.spec`. Los logs se consultan desde la UI o en `%APPDATA%\MyVoices\startup.log`.
+- **Actualizar sin recompilar:** Para cambios en `static/index.html`, reemplaza el archivo en `dist\MyVoices\_internal\static\`. Para cambios en Python, hay que recompilar con `build.bat`.
 - **Versión de Python:** El build debe usar la misma versión de Python que el entorno virtual.
+- **build.bat es idempotente:** puedes ejecutarlo varias veces sin problema; reutiliza el venv existente y solo reinstala lo necesario.

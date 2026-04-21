@@ -1,16 +1,16 @@
-# ChatVoice
+# MyVoices
 
-Aplicación de escritorio TTS para streaming. Lee el chat de Twitch con voz clonada usando **XTTSv2** (GPU/CPU) y **Piper TTS** (ligero, sin GPU). Se integra con SAMMI vía POST.
+Aplicación de escritorio TTS para streaming. Lee texto con voces clonadas usando **XTTSv2** (GPU/CPU) y **Piper TTS** (ligero, sin GPU). Se integra con SAMMI y otros sistemas vía API REST.
 
 ## Características
 
-- **Dos motores TTS**: XTTSv2 (alta calidad, clonación de voz) y Piper TTS (rápido, sin GPU)
-- **Presets**: guarda configuraciones completas (motor, voz, velocidad, tono) y aplícalas con un clic
-- **Frases guardadas**: biblioteca de textos con preset vinculado; se reproducen sin cambiar la config global
-- **Efecto de radio**: bandpass 400-3400 Hz + soft clipping + ruido
-- **Selector de dispositivo de audio**: elige por qué salida de Windows suena el TTS
+- **Dos motores TTS**: XTTSv2 (clonación de voz, alta calidad) y Piper TTS (rápido, sin GPU)
+- **Presets de voz**: combina una voz con velocidad, tono y efecto de radio y guárdala con un nombre
+- **API REST simple**: solo `voice` + `text` — sin parámetros técnicos
+- **Frases guardadas**: biblioteca de textos asociados a un preset; reproducibles por nombre vía API
+- **Efecto de radio**: bandpass 400–3400 Hz + soft clipping + ruido
+- **Panel de prueba**: selecciona un preset y escucha el resultado antes de usarlo en producción
 - **Visor de logs**: registro de actividad con auto-refresco, filtro por nivel y rotación automática
-- **Integración SAMMI**: endpoint POST `/speak` compatible con versiones anteriores
 
 ---
 
@@ -25,7 +25,7 @@ Necesario para compilar dependencias nativas de TTS.
 
 ---
 
-## Instalación
+## Instalación (modo desarrollo)
 
 ```bash
 # 1. Clona el repositorio
@@ -52,78 +52,78 @@ pip install -r requirements.txt
 
 ---
 
-## Ejecución
+## Ejecución en modo desarrollo
 
-### Como aplicación de escritorio (recomendado)
 ```bash
 venv\Scripts\activate
 python main.py
 ```
-Arranca el servidor en background y abre una ventana nativa (Edge WebView2).  
+
+Arranca el servidor en background y abre una ventana nativa (Edge WebView2).
 La primera vez descarga el modelo XTTSv2 (~2 GB) — tarda varios minutos.
 
-### Solo el servidor (para uso headless / SAMMI sin UI)
-```bash
-venv\Scripts\activate
-python server.py
+Panel web disponible también en: `http://localhost:8000`
+
+---
+
+## Generar ejecutable (.exe)
+
+`build.bat` es completamente autónomo:
+
+1. Crea el venv si no existe
+2. Detecta la GPU NVIDIA vía `nvidia-smi` y selecciona la versión CUDA adecuada
+3. Instala PyTorch, dependencias y PyInstaller automáticamente
+4. Compila el ejecutable con PyInstaller
+
+```bat
+build.bat
 ```
-Panel de control disponible en: `http://localhost:8000`
+
+El ejecutable final queda en `dist\MyVoices\MyVoices.exe`.
+
+> Ver [GUIA_EJECUTABLE.md](GUIA_EJECUTABLE.md) para detalles y solución de problemas.
 
 ---
 
-## Configuración de voz (XTTSv2)
+## API REST
 
-1. Graba **6-10 segundos** de voz clara, sin ruido de fondo
-2. Guarda como `.wav` y súbelo desde la pestaña **"Subir voz"** en el panel
-3. Selecciona la voz como activa
+### Reproducir texto con un preset de voz
 
-### Piper TTS (alternativa sin GPU)
-1. Ve a la pestaña **Piper TTS** → **Descargar voces desde HuggingFace**
-2. Filtra por idioma, descarga e instala con un clic
-3. Selecciona como voz activa
+```
+POST http://localhost:8000/api/speak
+Content-Type: application/json
 
----
-
-## Integración SAMMI
-
-POST a `http://localhost:8000/speak`:
-
-```json
 {
-  "text": "Hola chat!",
-  "engine": "xtts",
-  "language": "es",
-  "radio_effect": false,
-  "speed": 1.0,
-  "pitch": 0,
-  "voice_index": 0,
-  "speaker_id": 0
+  "voice": "nombre_del_preset",
+  "text": "Hola chat, bienvenidos al stream!"
 }
 ```
 
-Todos los campos son opcionales excepto `text`. Los omitidos usan la Configuración Global activa.
+### Reproducir una frase guardada
 
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `text` | string | **Obligatorio** |
-| `engine` | `"xtts"` \| `"piper"` | Motor TTS |
-| `language` | string | Código de idioma (solo XTTS) |
-| `radio_effect` | bool | Efecto bandpass + distorsión |
-| `speed` | float 0.5–2.0 | Velocidad de habla |
-| `pitch` | int -12 a +12 | Semítonos de tono |
-| `voice_index` | int | Índice de voz dentro del motor activo |
-| `speaker_id` | int | ID de hablante en modelos Piper multi-speaker |
+```
+POST http://localhost:8000/api/phrases/{nombre}/play
+```
+
+---
+
+## Flujo de uso
+
+1. **Tab XTTS2** → sube un WAV de referencia → la voz queda registrada con un ID
+2. **Tab Piper** → descarga una voz del catálogo → regístrala con un nombre
+3. **Tab Principal** → selecciona una voz, ajusta velocidad/tono/radio → guarda como preset
+4. Llama a la API con `{"voice": "nombre_preset", "text": "..."}` desde SAMMI u otro sistema
 
 ---
 
 ## Datos de usuario
 
-Todos los datos persisten entre actualizaciones en `%APPDATA%\ChatVoice\`:
+Todos los datos persisten entre actualizaciones en `%APPDATA%\MyVoices\`:
 
 ```
-%APPDATA%\ChatVoice\
-├── chatvoice.db       ← configuración, presets, frases, logs
-├── voices\            ← archivos WAV de voces clonadas
+%APPDATA%\MyVoices\
+├── myvoices.db        ← DB con voces, presets, frases y logs
+├── voices\            ← archivos WAV de voces clonadas XTTS
 └── piper_voices\      ← modelos Piper (.onnx + .onnx.json)
 ```
 
@@ -131,17 +131,3 @@ El modelo XTTSv2 se guarda en:
 ```
 %USERPROFILE%\AppData\Local\tts\tts_models--multilingual--multi-dataset--xtts_v2\
 ```
-
----
-
-## Generar ejecutable (.exe)
-
-Ver [GUIA_EJECUTABLE.md](GUIA_EJECUTABLE.md) para instrucciones completas.
-
-```bash
-build.bat
-# o manualmente:
-pyinstaller ChatVoice.spec --noconfirm
-```
-
-El ejecutable final queda en `dist\ChatVoice\ChatVoice.exe`.
