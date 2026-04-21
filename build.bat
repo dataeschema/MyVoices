@@ -38,14 +38,12 @@ echo.
 
 REM ── 4. Detectar GPU NVIDIA ───────────────────────────────────────────────────
 echo Detectando GPU NVIDIA...
-set GPU_NAME=
-nvidia-smi --query-gpu=name --format=csv,noheader,nounits >"%TEMP%\myvoices_gpu.txt" 2>nul
-if exist "%TEMP%\myvoices_gpu.txt" (
-    set /p GPU_NAME=<"%TEMP%\myvoices_gpu.txt"
-    del "%TEMP%\myvoices_gpu.txt" >nul 2>&1
+set "GPU_NAME="
+for /f "tokens=* delims=" %%G in ('nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2^>nul') do (
+    if not defined GPU_NAME set "GPU_NAME=%%G"
 )
 
-if "%GPU_NAME%"=="" (
+if not defined GPU_NAME (
     echo.
     echo [AVISO] No se detecto ninguna GPU NVIDIA o los drivers no estan instalados.
     echo.
