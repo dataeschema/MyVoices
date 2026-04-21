@@ -565,7 +565,9 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
     else:
         global tts
         if tts is None:
-            raise ValueError("Modelo XTTS no cargado")
+            tts, _status = _load_tts_model()
+            if tts is None:
+                raise ValueError(f"Modelo XTTS no cargado: {_status}")
         ref_wav = VOICES_DIR / filename
         if not ref_wav.exists():
             raise ValueError(f"Archivo de voz '{filename}' no encontrado")
