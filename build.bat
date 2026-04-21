@@ -39,8 +39,8 @@ echo.
 REM ── 4. Detectar GPU NVIDIA ───────────────────────────────────────────────────
 echo Detectando GPU NVIDIA...
 set "GPU_NAME="
-for /f "tokens=* delims=" %%G in ('nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2^>nul') do (
-    if not defined GPU_NAME set "GPU_NAME=%%G"
+for /f "tokens=1* delims=:" %%A in ('nvidia-smi -L 2^>nul') do (
+    if not defined GPU_NAME set "GPU_NAME=%%B"
 )
 
 if not defined GPU_NAME (
