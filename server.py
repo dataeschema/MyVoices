@@ -62,7 +62,8 @@ if getattr(sys, "frozen", False):
         os.environ["PATH"] = _torch_lib + os.pathsep + os.environ.get("PATH", "")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
+from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import asyncio
@@ -516,6 +517,90 @@ async def _synth_xtts(text: str, wav_filename: str, speed: float,
             "message": f"Reproduciendo {n} fragmento{'s' if n > 1 else ''}..."}
 
 
+# ── Síntesis a fichero (para descarga) ───────────────────────────────────────
+def _synth_to_file_sync(preset_name: str, text: str) -> str:
+    """Sintetiza texto con el preset indicado y devuelve la ruta de un fichero WAV."""
+    preset = load_voice_preset(preset_name)
+    if not preset:
+        raise ValueError(f"Preset '{preset_name}' no encontrado")
+
+    engine     = preset["engine"]
+    filename   = preset["filename"]
+    speaker_id = preset["speaker_id"]
+    speed      = float(preset.get("speed", 1.0))
+    pitch      = float(preset.get("pitch", 0.0))
+    radio      = bool(preset.get("radio_effect", False))
+    language   = load_config().get("language", "es")
+
+    chunks      = split_into_chunks(text)
+    chunk_files: list[str] = []
+
+    if engine == "piper":
+        if not PIPER_AVAILABLE:
+            raise ValueError("Piper TTS no disponible")
+        voice   = _get_piper_voice(filename)
+        syn_cfg = PiperSynthConfig(
+            length_scale=1.0 / max(0.1, speed),
+            speaker_id=speaker_id,
+        )
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            path = tmp.name; tmp.close()
+            with wave_module.open(path, "wb") as wf:
+                voice.synthesize_wav(chunk, wf, syn_config=syn_cfg)
+            if radio:              apply_radio_effect(path)
+            if abs(pitch) >= 0.1:  apply_pitch(path, pitch)
+            chunk_files.append(path)
+    else:
+        global tts
+        if tts is None:
+            raise ValueError("Modelo XTTS no cargado")
+        ref_wav = VOICES_DIR / filename
+        if not ref_wav.exists():
+            raise ValueError(f"Archivo de voz '{filename}' no encontrado")
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            path = tmp.name; tmp.close()
+            tts.tts_to_file(
+                text=chunk, speaker_wav=str(ref_wav),
+                language=language, file_path=path,
+            )
+            if radio:                    apply_radio_effect(path)
+            if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
+            if abs(pitch) >= 0.1:        apply_pitch(path, pitch)
+            chunk_files.append(path)
+
+    if not chunk_files:
+        raise ValueError("No se generó audio")
+
+    if len(chunk_files) == 1:
+        return chunk_files[0]
+
+    # Concatenar fragmentos en un solo WAV
+    segments: list[np.ndarray] = []
+    sr = 22050
+    for f in chunk_files:
+        _sr, data = scipy_wavfile.read(f)
+        sr = _sr
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        if data.dtype != np.int16:
+            data = data.astype(np.float32)
+            peak = float(np.max(np.abs(data))) or 1.0
+            data = (data / peak * 32767).astype(np.int16)
+        segments.append(data.astype(np.int16))
+        os.remove(f)
+
+    out      = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    out_path = out.name; out.close()
+    scipy_wavfile.write(out_path, sr, np.concatenate(segments))
+    return out_path
+
+
 # ── Modelos de request ────────────────────────────────────────────────────────
 class SpeakRequest(BaseModel):
     voice: str
@@ -860,6 +945,26 @@ async def api_speak(req: SpeakRequest):
     if not req.voice.strip():
         raise HTTPException(400, "El campo 'voice' (nombre del preset) no puede estar vacío")
     return await _speak_with_preset(req.voice.strip(), req.text.strip())
+
+
+@app.post("/api/speak/download")
+async def api_speak_download(req: SpeakRequest):
+    """Sintetiza texto con el preset y devuelve el WAV para descarga."""
+    if not req.text.strip() or not req.voice.strip():
+        raise HTTPException(400, "voice y text son obligatorios")
+    try:
+        path = await asyncio.to_thread(
+            _synth_to_file_sync, req.voice.strip(), req.text.strip()
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", req.voice.strip())
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        filename=f"myvoices_{safe_name}.wav",
+        background=BackgroundTask(os.remove, path),
+    )
 
 
 # ── Logs ──────────────────────────────────────────────────────────────────────

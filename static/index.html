@@ -80,17 +80,14 @@ nav { display: flex; gap: 4px; }
 .tab-panel { display: none; height: 100%; overflow-y: auto; padding: 20px; }
 .tab-panel.active { display: block; }
 
-/* ── Grid principal ─────────────────────────────────────────────────────── */
+/* ── Grid principal — right col always ≥1/3 ────────────────────────────── */
 .main-grid {
   display: grid;
-  grid-template-columns: 1fr 420px;
+  grid-template-columns: 2fr 1fr;
   grid-template-rows: auto auto 1fr;
   gap: 16px;
   max-width: 1800px;
   margin: 0 auto;
-}
-@media (max-width: 1100px) {
-  .main-grid { grid-template-columns: 1fr 340px; }
 }
 @media (max-width: 900px) {
   .main-grid { grid-template-columns: 1fr; }
@@ -173,6 +170,10 @@ td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: 
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: var(--surface2); }
 
+/* clickable phrase rows */
+.phrase-row { cursor: pointer; }
+.phrase-row.selected td { background: var(--accent-lo) !important; }
+
 .badge {
   display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px;
   border-radius: 20px; text-transform: uppercase;
@@ -252,10 +253,12 @@ details[open] summary::before { transform: rotate(90deg); }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
 
-/* ── Inline edit row ─────────────────────────────────────────────────────── */
-.edit-row { display: none; }
-.edit-row.visible { display: table-row; }
-.edit-row td { background: var(--surface2); padding: 10px; }
+/* ── Save-phrase row at bottom of test panel ─────────────────────────────── */
+.save-phrase-row {
+  display: flex; gap: 8px; align-items: flex-end; margin-top: 14px;
+  padding-top: 14px; border-top: 1px solid var(--border);
+}
+.save-phrase-row .form-row { flex: 1; margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -306,7 +309,7 @@ details[open] summary::before { transform: rotate(90deg); }
 <div class="tab-panel active" id="tab-main">
 <div class="main-grid">
 
-  <!-- COL IZQUIERDA -->
+  <!-- ── COL IZQUIERDA (2/3) ────────────────────────────────────────────── -->
   <div style="display:flex;flex-direction:column;gap:16px">
 
     <!-- Configurar preset -->
@@ -314,7 +317,7 @@ details[open] summary::before { transform: rotate(90deg); }
       <div class="card-title">⚙️ Configurar preset de voz</div>
       <div class="form-row">
         <label>Voz (XTTS clonada o Piper)</label>
-        <select id="presetVoice" onchange="onVoiceChange()">
+        <select id="presetVoice">
           <option value="">— selecciona una voz —</option>
         </select>
       </div>
@@ -367,69 +370,55 @@ details[open] summary::before { transform: rotate(90deg); }
       <div class="card-title">🎧 Panel de prueba</div>
       <div class="form-row">
         <label>Preset</label>
-        <select id="testPreset">
+        <select id="testPreset" onchange="clearSelectedPhrase()">
           <option value="">— selecciona preset —</option>
         </select>
       </div>
       <div class="form-row">
         <label>Texto</label>
-        <textarea id="testText" rows="2" placeholder="Escribe el texto a reproducir…"></textarea>
+        <textarea id="testText" rows="3" placeholder="Escribe el texto a reproducir…" oninput="clearSelectedPhrase()"></textarea>
       </div>
-      <button class="btn btn-success" id="testBtn" onclick="testSpeak()">▶ Reproducir</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-success" id="testBtn" onclick="testSpeak()">▶ Reproducir</button>
+        <button class="btn btn-secondary" id="downloadBtn" onclick="testDownload()">⬇ Descargar audio</button>
+      </div>
+      <!-- Guardar frase desde el panel de prueba -->
+      <div class="save-phrase-row">
+        <div class="form-row">
+          <label>Nombre para guardar como frase</label>
+          <input type="text" id="savePhraseName" placeholder="Ej: bienvenida">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveTestAsPhrase()">💾 Guardar frase</button>
+      </div>
     </div>
 
   </div>
 
-  <!-- COL DERECHA -->
+  <!-- ── COL DERECHA (1/3) ──────────────────────────────────────────────── -->
   <div style="display:flex;flex-direction:column;gap:16px">
 
     <!-- API REST -->
     <div class="card">
       <div class="card-title">📡 API REST</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      <p id="apiExampleDesc" style="font-size:12px;color:var(--muted);margin-bottom:10px">
         Envía texto con un preset de voz configurado:
       </p>
       <pre class="code-block" id="apiExample">{
   "voice": "Locutor_Grave",
   "text": "Hola chat, bienvenidos!"
 }</pre>
-      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+      <div id="apiEndpointLine" style="margin-top:8px;font-size:12px;color:var(--muted)">
         <code style="color:var(--accent)">POST http://localhost:8000/api/speak</code>
       </div>
       <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="copyApiExample()">📋 Copiar</button>
-      <hr style="border-color:var(--border);margin:14px 0">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:6px">Para reproducir una frase guardada:</p>
-      <div style="font-size:12px">
-        <code style="color:var(--accent)">POST http://localhost:8000/api/phrases/<b>{nombre}</b>/play</code>
-      </div>
     </div>
 
-    <!-- Frases guardadas -->
+    <!-- Frases guardadas — clickable rows, created from test panel -->
     <div class="card" style="flex:1">
-      <div class="card-title" style="justify-content:space-between">
-        <span>📝 Frases guardadas</span>
-        <button class="btn btn-secondary btn-sm" onclick="toggleAddPhrase()">+ Nueva</button>
-      </div>
-      <div id="addPhraseForm" style="display:none;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
-        <div class="form-row">
-          <label>Nombre (API usará este nombre)</label>
-          <input type="text" id="phraseNameIn" placeholder="Ej: bienvenida">
-        </div>
-        <div class="form-row">
-          <label>Texto</label>
-          <textarea id="phraseTextIn" rows="2" placeholder="Texto que se reproducirá…"></textarea>
-        </div>
-        <div class="form-row">
-          <label>Preset de voz</label>
-          <select id="phrasePreset">
-            <option value="">— sin preset —</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="addPhrase()">Guardar frase</button>
-          <button class="btn btn-secondary btn-sm" onclick="toggleAddPhrase()">Cancelar</button>
-        </div>
-      </div>
+      <div class="card-title">📝 Frases guardadas</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">
+        Haz clic en una frase para cargarla en el panel de prueba.
+      </p>
       <div class="tbl-wrap">
         <table id="phrasesTable">
           <thead><tr><th>Nombre</th><th>Texto</th><th>Preset</th><th></th></tr></thead>
@@ -515,15 +504,15 @@ details[open] summary::before { transform: rotate(90deg); }
 <div class="tab-panel" id="tab-piper">
   <div style="max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
 
-    <!-- Catálogo HuggingFace -->
+    <!-- Catálogo HuggingFace — requires language selection -->
     <div class="card">
       <div class="card-title" style="justify-content:space-between">
         <span>🌐 Descargar voces (HuggingFace)</span>
-        <button class="btn btn-secondary btn-sm" onclick="loadPiperCatalog()">↻ Cargar catálogo</button>
+        <button class="btn btn-secondary btn-sm" onclick="fetchPiperCatalog()">↻ Cargar idiomas</button>
       </div>
       <div class="filter-row">
         <select id="piperLangFilter" onchange="renderCatalog()">
-          <option value="">Todos los idiomas</option>
+          <option value="">— Selecciona un idioma —</option>
         </select>
         <select id="piperQualFilter" onchange="renderCatalog()">
           <option value="">Todas las calidades</option>
@@ -537,42 +526,18 @@ details[open] summary::before { transform: rotate(90deg); }
       <div class="tbl-wrap">
         <table>
           <thead><tr>
-            <th>Nombre</th><th>Idioma</th><th>Calidad</th><th>Hab.</th><th>MB</th><th>Estado</th><th></th>
+            <th>Nombre</th><th>Idioma</th><th>Calidad</th><th>Hab.</th><th>MB</th><th></th>
           </tr></thead>
           <tbody id="catalogBody">
-            <tr><td colspan="7" class="empty">Haz clic en "Cargar catálogo" para ver las voces disponibles</td></tr>
+            <tr><td colspan="6" class="empty">Haz clic en "Cargar idiomas" y luego selecciona un idioma</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- Voces Piper instaladas -->
+    <!-- Voces Piper instaladas — auto-registered after download -->
     <div class="card">
       <div class="card-title">🗂 Voces Piper instaladas</div>
-      <div id="piperRegisterNote" style="display:none;margin-bottom:12px;padding:10px;background:var(--surface2);border-radius:var(--radius-sm);font-size:12px;color:var(--muted)">
-        💡 Después de descargar una voz, regístrala aquí para poder usarla en presets.
-      </div>
-      <div id="piperRegisterForm" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-        <div class="form-row">
-          <label>Nombre para mostrar</label>
-          <input type="text" id="piperRegName" placeholder="Ej: Carlos_ES">
-        </div>
-        <div class="form-row">
-          <label>Modelo (archivo .onnx sin extensión)</label>
-          <input type="text" id="piperRegFilename" placeholder="Ej: es_ES-carlfm-medium">
-        </div>
-        <div class="form-row">
-          <label>Speaker ID (0 si el modelo tiene un solo hablante)</label>
-          <input type="number" id="piperRegSpeaker" value="0" min="0">
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="registerPiperVoice()">Registrar</button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('piperRegisterForm').style.display='none'">Cancelar</button>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-        <button class="btn btn-secondary btn-sm" onclick="showPiperRegisterForm()">+ Registrar voz instalada</button>
-      </div>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>ID</th><th>Nombre</th><th>Modelo</th><th>Idioma</th><th>Hab.</th><th>Creada</th><th></th></tr></thead>
@@ -594,13 +559,15 @@ details[open] summary::before { transform: rotate(90deg); }
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-let allVoices   = [];
-let allPresets  = [];
-let allPhrases  = [];
-let catalogData = [];
-let piperVoices = [];
-let _logTimer   = null;
-let _dlPollers  = {};
+let allVoices          = [];
+let allPresets         = [];
+let allPhrases         = [];
+let catalogData        = [];
+let piperVoices        = [];
+let _logTimer          = null;
+let _dlPollers         = {};
+let _draggedFile       = null;   // file from drag-drop (can't be read via input.files)
+let _selectedPhraseId  = null;   // currently selected phrase row
 
 // ── Init ───────────────────────────────────────────────────────────────────
 (async () => {
@@ -619,11 +586,13 @@ function setupTabs() {
       btn.classList.add('active');
       document.getElementById('tab-' + id).classList.add('active');
       if (id === 'xtts') loadXttsVoices();
-      if (id === 'piper') loadPiperVoices();
+      if (id === 'piper') {
+        loadPiperVoices();
+        if (!catalogData.length) fetchPiperCatalog();
+      }
     });
   });
 
-  // Log auto-refresh
   const details = document.getElementById('logDetails');
   details.addEventListener('toggle', () => {
     if (details.open) {
@@ -696,7 +665,7 @@ function populateVoiceSelects() {
   const sel = document.getElementById('presetVoice');
   const cur = sel.value;
   sel.innerHTML = '<option value="">— selecciona una voz —</option>';
-  const xtts = allVoices.filter(v => v.engine === 'xtts');
+  const xtts  = allVoices.filter(v => v.engine === 'xtts');
   const piper = allVoices.filter(v => v.engine === 'piper');
   if (xtts.length) {
     const g = document.createElement('optgroup'); g.label = '🎤 XTTS2 (clonadas)';
@@ -718,8 +687,6 @@ function populateVoiceSelects() {
   }
   if (cur) sel.value = cur;
 }
-
-function onVoiceChange() {}
 
 // ── Presets ────────────────────────────────────────────────────────────────
 async function loadPresets() {
@@ -749,20 +716,18 @@ function renderPresets() {
 }
 
 function populatePresetSelects() {
-  ['testPreset', 'phrasePreset'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = id === 'phrasePreset'
-      ? '<option value="">— sin preset —</option>'
-      : '<option value="">— selecciona preset —</option>';
-    allPresets.forEach(p => {
-      const o = document.createElement('option');
-      o.value = p.name; o.textContent = p.name;
-      sel.appendChild(o);
-    });
-    if (cur) sel.value = cur;
+  const sel = document.getElementById('testPreset');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— selecciona preset —</option>';
+  allPresets.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.name; o.textContent = p.name;
+    sel.appendChild(o);
   });
+  if (cur) sel.value = cur;
+  // Update API example with current preset
+  if (!_selectedPhraseId) updateApiExample(null);
 }
 
 async function savePreset() {
@@ -824,12 +789,107 @@ async function testSpeak() {
   }
 }
 
-// ── API Example ────────────────────────────────────────────────────────────
+// ── Download audio ─────────────────────────────────────────────────────────
+async function testDownload() {
+  const preset = document.getElementById('testPreset').value;
+  const text   = document.getElementById('testText').value.trim();
+  if (!preset) { showToast('Selecciona un preset', 'error'); return; }
+  if (!text)   { showToast('Escribe un texto', 'error'); return; }
+
+  const btn = document.getElementById('downloadBtn');
+  btn.disabled = true; btn.textContent = '⌛ Generando…';
+  try {
+    const res = await fetch('/api/speak/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voice: preset, text }),
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Audio descargado', 'success');
+    } else {
+      const e = await res.json(); showToast(e.detail || 'Error al generar audio', 'error');
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = '⬇ Descargar audio';
+  }
+}
+
+// ── Save test panel as phrase ──────────────────────────────────────────────
+async function saveTestAsPhrase() {
+  const name   = document.getElementById('savePhraseName').value.trim();
+  const text   = document.getElementById('testText').value.trim();
+  const preset = document.getElementById('testPreset').value;
+
+  if (!name)   { showToast('Escribe un nombre para la frase', 'error'); return; }
+  if (!text)   { showToast('El texto no puede estar vacío', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('text', text);
+  if (preset) fd.append('voice_preset_name', preset);
+
+  const res = await fetch('/api/phrases', { method: 'POST', body: fd });
+  if (res.ok) {
+    showToast(`Frase "${name}" guardada`, 'success');
+    document.getElementById('savePhraseName').value = '';
+    await loadPhrases();
+    updateApiExample(name);   // show the phrase endpoint in the API card
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error al guardar', 'error');
+  }
+}
+
+// ── Load phrase into test panel (click on phrase row) ─────────────────────
+function loadPhraseToTest(id) {
+  const phrase = allPhrases.find(p => p.id === id);
+  if (!phrase) return;
+  _selectedPhraseId = id;
+  document.getElementById('testText').value    = phrase.text || '';
+  document.getElementById('testPreset').value  = phrase.voice_preset_name || '';
+  document.getElementById('savePhraseName').value = phrase.name;
+  // Highlight selected row
+  document.querySelectorAll('.phrase-row').forEach(r => r.classList.remove('selected'));
+  const row = document.getElementById(`phrase-row-${id}`);
+  if (row) row.classList.add('selected');
+  updateApiExample(phrase.name);
+}
+
+function clearSelectedPhrase() {
+  _selectedPhraseId = null;
+  document.querySelectorAll('.phrase-row').forEach(r => r.classList.remove('selected'));
+  updateApiExample(null);
+}
+
+// ── API Example card ───────────────────────────────────────────────────────
+function updateApiExample(phraseName) {
+  const codeEl    = document.getElementById('apiExample');
+  const descEl    = document.getElementById('apiExampleDesc');
+  const endptEl   = document.getElementById('apiEndpointLine');
+  if (phraseName) {
+    descEl.textContent  = 'Reproducir frase guardada:';
+    codeEl.textContent  = `POST http://localhost:8000/api/phrases/${phraseName}/play`;
+    endptEl.style.display = 'none';
+  } else {
+    descEl.textContent  = 'Envía texto con un preset de voz configurado:';
+    const preset = document.getElementById('testPreset')?.value || (allPresets[0]?.name || 'nombre_preset');
+    codeEl.textContent  = JSON.stringify({ voice: preset || 'nombre_preset', text: 'Hola chat, bienvenidos!' }, null, 2);
+    endptEl.style.display = '';
+  }
+}
+
 function copyApiExample() {
-  const preset = allPresets[0]?.name || 'nombre_preset';
-  const obj = { voice: preset, text: 'Hola chat, bienvenidos!' };
-  navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
-  showToast('JSON copiado', 'success');
+  const text = document.getElementById('apiExample').textContent;
+  navigator.clipboard.writeText(text);
+  showToast('Copiado', 'success');
 }
 
 // ── Phrases ────────────────────────────────────────────────────────────────
@@ -845,42 +905,30 @@ function renderPhrases() {
     return;
   }
   tbody.innerHTML = allPhrases.map(p => `
-    <tr>
-      <td><code style="color:var(--accent)">${esc(p.name)}</code></td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+    <tr class="phrase-row" id="phrase-row-${p.id}" onclick="loadPhraseToTest(${p.id})">
+      <td><code style="color:var(--accent);font-size:12px">${esc(p.name)}</code></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px"
           title="${esc(p.text)}">${esc(p.text)}</td>
-      <td>${p.voice_preset_name ? `<span class="badge badge-xtts">${esc(p.voice_preset_name)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deletePhrase(${p.id})">✕</button></td>
+      <td style="font-size:11px">${p.voice_preset_name
+        ? `<span class="badge badge-xtts">${esc(p.voice_preset_name)}</span>`
+        : '<span style="color:var(--muted)">—</span>'}</td>
+      <td><button class="btn btn-danger btn-sm"
+            onclick="event.stopPropagation();deletePhrase(${p.id})">✕</button></td>
     </tr>`).join('');
-}
 
-function toggleAddPhrase() {
-  const f = document.getElementById('addPhraseForm');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-
-async function addPhrase() {
-  const name   = document.getElementById('phraseNameIn').value.trim();
-  const text   = document.getElementById('phraseTextIn').value.trim();
-  const preset = document.getElementById('phrasePreset').value || null;
-  if (!name || !text) { showToast('Nombre y texto son obligatorios', 'error'); return; }
-  const fd = new FormData();
-  fd.append('name', name); fd.append('text', text);
-  if (preset) fd.append('voice_preset_name', preset);
-  const res = await fetch('/api/phrases', { method: 'POST', body: fd });
-  if (res.ok) {
-    showToast('Frase guardada', 'success');
-    document.getElementById('phraseNameIn').value = '';
-    document.getElementById('phraseTextIn').value = '';
-    toggleAddPhrase();
-    await loadPhrases();
-  } else {
-    const e = await res.json(); showToast(e.detail || 'Error', 'error');
+  // Re-apply selection highlight
+  if (_selectedPhraseId) {
+    const row = document.getElementById(`phrase-row-${_selectedPhraseId}`);
+    if (row) row.classList.add('selected');
   }
 }
 
 async function deletePhrase(id) {
   if (!confirm('¿Eliminar esta frase?')) return;
+  if (_selectedPhraseId === id) {
+    _selectedPhraseId = null;
+    updateApiExample(null);
+  }
   await fetch(`/api/phrases/${id}`, { method: 'DELETE' });
   showToast('Frase eliminada', 'info');
   await loadPhrases();
@@ -917,13 +965,18 @@ function setupDragDrop() {
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
   zone.addEventListener('drop', e => {
-    e.preventDefault(); zone.classList.remove('dragover');
+    e.preventDefault();
+    zone.classList.remove('dragover');
     const f = e.dataTransfer.files[0];
-    if (f) handleWavFile(f);
+    if (f) {
+      _draggedFile = f;   // store reference — input.files is read-only
+      handleWavFile(f);
+    }
   });
 }
 
 function onWavSelected(input) {
+  _draggedFile = null;   // file came from the real input, not drag-drop
   if (input.files[0]) handleWavFile(input.files[0]);
 }
 
@@ -938,18 +991,21 @@ function handleWavFile(file) {
 }
 
 function cancelUpload() {
+  _draggedFile = null;
   document.getElementById('dropLabel').textContent = '📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo';
   document.getElementById('uploadForm').style.display = 'none';
   document.getElementById('wavFile').value = '';
 }
 
 async function uploadXttsVoice() {
-  const file = document.getElementById('wavFile').files[0];
+  // When file was dragged, input.files is empty — use stored reference
+  const file = _draggedFile || document.getElementById('wavFile').files[0];
   const name = document.getElementById('xttsVoiceName').value.trim();
   if (!file) { showToast('Selecciona un archivo WAV', 'error'); return; }
   if (!name) { showToast('Escribe un nombre para la voz', 'error'); return; }
   const fd = new FormData();
-  fd.append('file', file); fd.append('name', name);
+  fd.append('file', file, file.name);
+  fd.append('name', name);
   const btn = document.getElementById('uploadBtn');
   btn.disabled = true; btn.textContent = 'Subiendo…';
   const res = await fetch('/api/voices/xtts', { method: 'POST', body: fd });
@@ -1024,10 +1080,8 @@ function renderPiperVoices() {
   const tbody = document.getElementById('piperVoicesBody');
   if (!piperVoices.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty">No hay voces Piper registradas</td></tr>';
-    document.getElementById('piperRegisterNote').style.display = 'block';
     return;
   }
-  document.getElementById('piperRegisterNote').style.display = 'none';
   tbody.innerHTML = piperVoices.map(v => `
     <tr id="piper-row-${v.id}">
       <td style="color:var(--muted)">${v.id}</td>
@@ -1054,69 +1108,64 @@ async function deletePiperVoice(id) {
   }
 }
 
-function showPiperRegisterForm() {
-  document.getElementById('piperRegisterForm').style.display = 'block';
-}
-
-async function registerPiperVoice() {
-  const name     = document.getElementById('piperRegName').value.trim();
-  const filename = document.getElementById('piperRegFilename').value.trim();
-  const speaker  = document.getElementById('piperRegSpeaker').value;
-  if (!name || !filename) { showToast('Nombre y archivo son obligatorios', 'error'); return; }
-  const fd = new FormData();
-  fd.append('name', name); fd.append('filename', filename); fd.append('speaker_id', speaker);
-  const res = await fetch('/api/piper/register', { method: 'POST', body: fd });
-  if (res.ok) {
-    const v = await res.json();
-    showToast(`Voz "${v.name}" registrada (ID ${v.id})`, 'success');
-    document.getElementById('piperRegisterForm').style.display = 'none';
-    await loadPiperVoices(); await loadVoices(); await loadStatus();
-  } else {
-    const e = await res.json(); showToast(e.detail || 'Error', 'error');
-  }
-}
-
 // ── Piper catalog ──────────────────────────────────────────────────────────
-async function loadPiperCatalog() {
+
+// Fetches the full catalog from the API (or server cache) and populates
+// the language dropdown. Called once on first tab open and on "Cargar idiomas".
+async function fetchPiperCatalog() {
   document.getElementById('catalogBody').innerHTML =
-    '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">⌛ Cargando catálogo desde HuggingFace…</td></tr>';
+    '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">⌛ Cargando idiomas…</td></tr>';
   try {
-    catalogData = await fetch('/api/piper/available').then(r => r.json());
-    // Populate language filter
-    const langs = [...new Set(catalogData.map(v => v.language_code))].sort();
+    const raw = await fetch('/api/piper/available').then(r => r.json());
+    catalogData = raw;
+    const langs = [...new Set(raw.map(v => v.language_code))].sort();
     const sel   = document.getElementById('piperLangFilter');
-    sel.innerHTML = '<option value="">Todos los idiomas</option>';
+    const cur   = sel.value;
+    sel.innerHTML = '<option value="">— Selecciona un idioma —</option>';
     langs.forEach(l => {
       const o = document.createElement('option'); o.value = l; o.textContent = l;
       sel.appendChild(o);
     });
+    if (cur) sel.value = cur;
     renderCatalog();
   } catch (e) {
     document.getElementById('catalogBody').innerHTML =
-      `<tr><td colspan="7" class="empty">Error cargando catálogo: ${esc(e.message)}</td></tr>`;
+      `<tr><td colspan="6" class="empty">Error cargando catálogo: ${esc(e.message)}</td></tr>`;
   }
 }
 
+// Renders rows from already-fetched catalogData.
+// Requires a language to be selected; shows prompt otherwise.
 function renderCatalog() {
   const lang  = document.getElementById('piperLangFilter').value;
   const qual  = document.getElementById('piperQualFilter').value;
   const query = document.getElementById('piperSearch').value.toLowerCase();
   const tbody = document.getElementById('catalogBody');
 
+  if (!lang) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Selecciona un idioma para ver las voces disponibles</td></tr>';
+    return;
+  }
+  if (!catalogData.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Haz clic en "Cargar idiomas" primero</td></tr>';
+    return;
+  }
+
   const filtered = catalogData.filter(v =>
-    (!lang  || v.language_code.startsWith(lang)) &&
+    v.language_code.startsWith(lang) &&
     (!qual  || v.quality === qual) &&
     (!query || v.name.toLowerCase().includes(query) || v.language_name.toLowerCase().includes(query))
   );
 
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Sin resultados</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Sin resultados</td></tr>';
     return;
   }
 
   tbody.innerHTML = filtered.map(v => {
-    let action = '';
-    const st   = v.dl_status;
+    const safeKey = v.key.replace(/[^a-z0-9]/gi, '_');
+    let action;
+    const st = v.dl_status;
     if (v.installed || st === 'done') {
       action = '<span class="dl-status-done">✅ Instalada</span>';
     } else if (st === 'downloading') {
@@ -1133,9 +1182,7 @@ function renderCatalog() {
       <td style="font-size:12px">${esc(v.quality)}</td>
       <td style="font-size:12px">${v.num_speakers}</td>
       <td style="font-size:12px;color:var(--muted)">${v.size_mb} MB</td>
-      <td id="dl-st-${esc(v.key.replace(/[^a-z0-9]/gi,'_'))}">${action}</td>
-      <td>${action.includes('Instalada') ?
-        `<button class="btn btn-secondary btn-sm" onclick="showPiperRegisterFormPrefilled('${esc(v.key)}')">+ Registrar</button>` : ''}</td>
+      <td id="dl-st-${safeKey}">${action}</td>
     </tr>`;
   }).join('');
 }
@@ -1157,27 +1204,47 @@ function pollDownload(key) {
   _dlPollers[key] = setInterval(async () => {
     const st = await fetch(`/api/piper/download/${encodeURIComponent(key)}/status`)
       .then(r => r.json());
-    const el = document.getElementById(`dl-st-${safeKey}`);
+
     if (st.status === 'done') {
       clearInterval(_dlPollers[key]);
-      if (el) el.innerHTML = '<span class="dl-status-done">✅ Instalada</span>';
-      showToast('Descarga completada. Regístrala para usarla.', 'success');
-      await loadPiperCatalog();
+      const el = document.getElementById(`dl-st-${safeKey}`);
+      if (el) el.innerHTML = '<span class="dl-status-dl">⌛ Registrando…</span>';
+
+      // Auto-register: filename = last segment of key
+      const filename  = key.split('/').pop();
+      const cleanName = filename.replace(/[^a-zA-Z0-9_]/g, '_');
+      const fd = new FormData();
+      fd.append('name', cleanName);
+      fd.append('filename', filename);
+      fd.append('speaker_id', '0');
+
+      const reg = await fetch('/api/piper/register', { method: 'POST', body: fd });
+      if (reg.ok) {
+        const v = await reg.json();
+        showToast(`Voz "${v.name}" registrada (ID ${v.id})`, 'success');
+      } else {
+        // Name collision or already registered — still fine
+        showToast('Descarga completada y registrada', 'success');
+      }
+
+      await loadPiperVoices();
+      await loadVoices();
+      await loadStatus();
+
+      // Update catalog entry and clear display to prompt language re-selection
+      const item = catalogData.find(v => v.key === key);
+      if (item) { item.installed = true; item.dl_status = 'done'; }
+      document.getElementById('piperLangFilter').value = '';
+      renderCatalog();   // shows "Selecciona un idioma…" prompt
+
     } else if (st.status && st.status.startsWith('error')) {
       clearInterval(_dlPollers[key]);
+      const el = document.getElementById(`dl-st-${safeKey}`);
       if (el) el.innerHTML = `<span class="dl-status-err">✗ Error</span>
         <button class="btn btn-secondary btn-sm" onclick="downloadPiper('${esc(key)}')">↺</button>`;
+      showToast('Error en la descarga', 'error');
     }
   }, 2000);
-}
-
-function showPiperRegisterFormPrefilled(key) {
-  const namePart = key.split('/').pop() || key;
-  document.getElementById('piperRegName').value     = namePart.replace(/[^a-zA-Z0-9_]/g,'_');
-  document.getElementById('piperRegFilename').value = namePart;
-  document.getElementById('piperRegSpeaker').value  = '0';
-  showPiperRegisterForm();
-  document.getElementById('piperRegisterForm').scrollIntoView({ behavior: 'smooth' });
 }
 </script>
 </body>
