@@ -75,21 +75,21 @@ if errorlevel 1 (
 )
 echo.
 
-REM ── 7. Re-fijar numpy y networkx (gruut incompatible con versiones nuevas) ──
-echo Fijando versiones de numpy y networkx para compatibilidad con gruut...
-python -m pip install "numpy<2.0.0" "networkx<3.0.0"
-if errorlevel 1 (
-    echo [WARN] No se pudieron fijar numpy/networkx. Puede haber conflictos con gruut.
-)
-echo.
-
-REM ── 8. Instalar dependencias del proyecto ────────────────────────────────────
+REM ── 7. Instalar dependencias del proyecto ────────────────────────────────────
 echo Instalando dependencias (requirements.txt)...
 python -m pip install -r requirements.txt
 if errorlevel 1 (
     echo [ERROR] No se pudo instalar requirements.txt.
     pause
     exit /b 1
+)
+echo.
+
+REM ── 8. Re-fijar numpy y networkx tras requirements (gruut incompatible con versiones nuevas) ──
+echo Fijando numpy y networkx para compatibilidad con gruut...
+python -m pip install "numpy<2.0.0" "networkx<3.0.0"
+if errorlevel 1 (
+    echo [WARN] No se pudieron fijar numpy/networkx. Puede haber conflictos con gruut.
 )
 echo.
 
