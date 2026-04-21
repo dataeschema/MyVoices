@@ -36,48 +36,26 @@ echo Activando entorno virtual...
 call venv\Scripts\activate.bat
 echo.
 
-REM ── 4. Detectar GPU NVIDIA ───────────────────────────────────────────────────
-echo Detectando GPU NVIDIA...
-set "GPU_NAME="
-nvidia-smi -L > "%TEMP%\myvoices_gpu.txt" 2>nul
-if exist "%TEMP%\myvoices_gpu.txt" (
-    for /f "usebackq delims=" %%L in ("%TEMP%\myvoices_gpu.txt") do (
-        if not defined GPU_NAME set "GPU_NAME=%%L"
-    )
-    del "%TEMP%\myvoices_gpu.txt" >nul 2>&1
-)
+REM ── 4. Seleccionar version de PyTorch ───────────────────────────────────────
+echo Selecciona tu GPU:
+echo   [1] RTX 50xx (Blackwell)        - CUDA 12.8
+echo   [2] RTX 20xx / 30xx / 40xx      - CUDA 12.4  (recomendado para la mayoria)
+echo   [3] Sin GPU / Solo CPU
+echo.
+set /p GPU_CHOICE="Elige (1/2/3): "
 
-if not defined GPU_NAME (
-    echo.
-    echo [AVISO] No se detecto ninguna GPU NVIDIA o los drivers no estan instalados.
-    echo.
-    echo   Para usar XTTSv2 con GPU necesitas:
-    echo     1. Una GPU NVIDIA (RTX 20xx o superior recomendado)
-    echo     2. Drivers NVIDIA actualizados: https://www.nvidia.com/drivers
-    echo.
-    echo   XTTSv2 puede funcionar en CPU pero sera MUCHO mas lento.
-    echo   Piper TTS no requiere GPU y funcionara correctamente.
-    echo.
-    echo   Presiona cualquier tecla para continuar sin GPU (solo CPU + Piper)
-    echo   o cierra esta ventana para cancelar.
-    pause
-    set CUDA_INDEX=cpu
-    goto :install_torch
-)
-
-echo GPU detectada: %GPU_NAME%
-
-REM ── 5. Determinar version CUDA segun GPU ────────────────────────────────────
-set CUDA_INDEX=cu124
-
-echo %GPU_NAME% | findstr /i "RTX 50" >nul 2>&1
-if not errorlevel 1 (
+if "%GPU_CHOICE%"=="1" (
     set CUDA_INDEX=cu128
-    echo Arquitectura Blackwell detectada ^(RTX 50xx^) - usando CUDA 12.8
+    echo Usando CUDA 12.8 para Blackwell.
     goto :install_torch
 )
-
-echo GPU compatible con CUDA 12.4
+if "%GPU_CHOICE%"=="3" (
+    set CUDA_INDEX=cpu
+    echo Instalando PyTorch solo CPU.
+    goto :install_torch
+)
+set CUDA_INDEX=cu124
+echo Usando CUDA 12.4.
 echo.
 
 :install_torch
