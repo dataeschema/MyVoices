@@ -270,12 +270,18 @@ def _load_tts_model():
     return None, "No se pudo cargar el modelo."
 
 
-device          = "cuda" if torch.cuda.is_available() else "cpu"
-tts, model_status = _load_tts_model()
+if os.getenv("SKIP_MODEL_LOAD") == "1":
+    device       = "cpu"
+    tts          = None
+    model_status = "skipped"
+else:
+    device          = "cuda" if torch.cuda.is_available() else "cpu"
+    tts, model_status = _load_tts_model()
 
 # ── Audio ─────────────────────────────────────────────────────────────────────
 _audio_lock = threading.Lock()
-pygame.mixer.init()
+if os.getenv("SKIP_MODEL_LOAD") != "1":
+    pygame.mixer.init()
 
 app.mount("/static", StaticFiles(directory=str(get_static_dir())), name="static")
 
@@ -904,7 +910,11 @@ async def api_save_phrase(
         raise HTTPException(400, "name y text son obligatorios")
     if voice_preset_name and not load_voice_preset(voice_preset_name):
         raise HTTPException(404, f"Preset '{voice_preset_name}' no encontrado")
-    phrase_id = save_phrase(name.strip(), text.strip(), voice_preset_name or None)
+    import sqlite3 as _sqlite3
+    try:
+        phrase_id = save_phrase(name.strip(), text.strip(), voice_preset_name or None)
+    except _sqlite3.IntegrityError:
+        raise HTTPException(409, f"Ya existe una frase con el nombre '{name.strip()}'")
     return get_phrase(phrase_id)
 
 

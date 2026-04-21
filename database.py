@@ -165,7 +165,7 @@ def init_db() -> None:
 
 
 def _migrate_old_appdata() -> None:
-    """Copia voces WAV del directorio legacy %APPDATA%\ChatVoice si existen."""
+    """Copia voces WAV del directorio legacy %APPDATA%/ChatVoice si existen."""
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home()))
     else:
