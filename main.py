@@ -2,83 +2,18 @@
 MyVoices Desktop — Punto de entrada con splash screen.
 
 Flujo:
-  1. Se muestra la splash inmediatamente (pywebview frameless).
-  2. En un hilo daemon se importa server.py (torch + TTS model + uvicorn).
-  3. La barra de progreso se anima vía evaluate_js mientras carga.
-  4. Cuando el servidor responde, se abre la ventana principal y se cierra la splash.
+  1. Splash tkinter aparece casi instantáneamente (stdlib, <100 ms).
+  2. Hilo daemon: importa webview, server.py (torch+TTS), arranca uvicorn.
+  3. La barra de progreso se actualiza vía cola thread-safe.
+  4. Cuando el servidor responde, se cierra la splash y se abre webview.
 """
 import os
 import sys
+import queue
 import threading
 import time
 import traceback
-
-
-# ── Splash HTML ───────────────────────────────────────────────────────────────
-
-_SPLASH_HTML = """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; }
-  body {
-    background: #080d17;
-    color: #e2e8f0;
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    -webkit-app-region: drag;
-    user-select: none;
-  }
-  .logo {
-    font-size: 2.4rem;
-    font-weight: 700;
-    color: #4f7ef7;
-    letter-spacing: -0.5px;
-    margin-bottom: 0.35rem;
-  }
-  .tagline {
-    font-size: 0.85rem;
-    color: #5a7090;
-    margin-bottom: 2.8rem;
-  }
-  .bar-wrap {
-    width: 300px;
-    height: 5px;
-    background: #0f1729;
-    border-radius: 99px;
-    overflow: hidden;
-    margin-bottom: 1rem;
-    border: 1px solid #1e3050;
-  }
-  .bar {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, #4f7ef7, #7c3aed);
-    border-radius: 99px;
-    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .status { font-size: 0.78rem; color: #5a7090; }
-</style>
-</head>
-<body>
-  <div class="logo">MyVoices</div>
-  <div class="tagline">Síntesis de voz avanzada</div>
-  <div class="bar-wrap"><div class="bar" id="bar"></div></div>
-  <div class="status" id="status">Iniciando…</div>
-  <script>
-    function setProgress(pct, msg) {
-      document.getElementById('bar').style.width = pct + '%';
-      if (msg !== undefined) document.getElementById('status').textContent = msg;
-    }
-  </script>
-</body>
-</html>"""
+import tkinter as tk
 
 
 # ── Log de arranque ───────────────────────────────────────────────────────────
@@ -124,6 +59,76 @@ def _show_error(msg: str) -> None:
         pass
 
 
+# ── Splash tkinter ────────────────────────────────────────────────────────────
+
+def _build_splash():
+    """
+    Crea y devuelve la ventana tkinter frameless con barra de progreso.
+    Devuelve (root, set_progress, close_splash).
+    set_progress(pct, msg=None) es thread-safe.
+    close_splash() destruye la ventana desde cualquier hilo.
+    """
+    root = tk.Tk()
+    root.overrideredirect(True)          # sin borde ni barra de título
+    root.configure(bg="#080d17")
+    root.attributes("-topmost", True)    # encima de todo hasta que se cierre
+
+    W, H = 460, 260
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"{W}x{H}+{(sw-W)//2}+{(sh-H)//2}")
+
+    # ── Contenido ──
+    tk.Label(root, text="MyVoices",
+             font=("Segoe UI", 28, "bold"), fg="#4f7ef7", bg="#080d17"
+             ).pack(pady=(48, 4))
+    tk.Label(root, text="Síntesis de voz avanzada",
+             font=("Segoe UI", 10), fg="#5a7090", bg="#080d17"
+             ).pack(pady=(0, 28))
+
+    # Barra de progreso (canvas dibujado, sin depender de ttk themes)
+    c = tk.Canvas(root, width=300, height=6, bg="#0f1729",
+                  highlightthickness=1, highlightbackground="#1e3050")
+    c.pack()
+    bar = c.create_rectangle(0, 0, 0, 6, fill="#4f7ef7", outline="")
+
+    status_lbl = tk.Label(root, text="Iniciando…",
+                          font=("Segoe UI", 9), fg="#5a7090", bg="#080d17")
+    status_lbl.pack(pady=(12, 0))
+
+    # ── Arrastrable desde cualquier punto ──
+    def _drag_start(e):
+        root._dx, root._dy = e.x, e.y
+    def _drag_move(e):
+        root.geometry(f"+{root.winfo_x()+e.x-root._dx}+{root.winfo_y()+e.y-root._dy}")
+    root.bind("<Button-1>",  _drag_start)
+    root.bind("<B1-Motion>", _drag_move)
+
+    # ── Cola thread-safe para actualizar widgets desde el hilo daemon ──
+    _q: queue.Queue = queue.Queue()
+
+    def _poll():
+        try:
+            while True:
+                _q.get_nowait()()
+        except queue.Empty:
+            pass
+        root.after(40, _poll)
+
+    root.after(40, _poll)
+
+    def set_progress(pct: int, msg: str | None = None) -> None:
+        def _do():
+            c.coords(bar, 0, 0, 300 * pct / 100, 6)
+            if msg is not None:
+                status_lbl.config(text=msg)
+        _q.put(_do)
+
+    def close_splash() -> None:
+        _q.put(root.destroy)
+
+    return root, set_progress, close_splash
+
+
 # ── Esperar servidor ──────────────────────────────────────────────────────────
 
 def _wait_for_server(url: str, timeout: float = 180.0) -> bool:
@@ -151,43 +156,32 @@ def main() -> None:
         _log(f"_MEIPASS: {getattr(sys, '_MEIPASS', 'N/A')}")
     else:
         _log(f"Modo dev  | CWD: {os.getcwd()}")
-
     _log(f"Python {sys.version}")
 
-    import webview
-
-    splash = webview.create_window(
-        title="MyVoices",
-        html=_SPLASH_HTML,
-        width=460,
-        height=260,
-        frameless=True,
-        easy_drag=True,
-    )
+    # Splash aparece antes de cualquier import pesado
+    root, set_progress, close_splash = _build_splash()
+    _log("Splash tkinter creada.")
 
     _result: dict = {}
 
-    def _set_progress(pct: int, msg: str | None = None) -> None:
+    def _load_everything() -> None:
         try:
-            js = f"setProgress({pct})" if msg is None else f"setProgress({pct}, {repr(msg)})"
-            splash.evaluate_js(js)
-        except Exception:
-            pass
+            set_progress(5, "Cargando módulos…")
 
-    def _load_app() -> None:
-        try:
-            time.sleep(0.3)  # deja que la splash renderice
-            _set_progress(5, "Cargando módulos…")
+            # Importar webview aquí (tarda ~1-3 s) para que cuando lo
+            # necesitemos después de mainloop() ya esté en sys.modules.
+            import webview  # noqa: F401
 
-            # Animación continua 5→70% mientras carga server.py (torch + TTS model)
-            # El modelo tarda entre 20-60 segundos; ajustamos el denominador (~50s).
-            _stop_anim = threading.Event()
+            set_progress(10, "Cargando módulos…")
+
+            # Animar 10→72 % mientras carga server.py (torch + TTS model)
+            _stop = threading.Event()
             def _anim():
                 t0 = time.monotonic()
-                while not _stop_anim.is_set():
+                while not _stop.is_set():
                     elapsed = time.monotonic() - t0
-                    pct = 5 + min(65, int(elapsed / 50 * 65))
-                    _set_progress(pct)
+                    pct = 10 + min(62, int(elapsed / 50 * 62))
+                    set_progress(pct)
                     time.sleep(0.5)
             threading.Thread(target=_anim, daemon=True).start()
 
@@ -196,8 +190,8 @@ def main() -> None:
             from server import app
             _log("server.py importado OK.")
 
-            _stop_anim.set()
-            _set_progress(75, "Iniciando servidor…")
+            _stop.set()
+            set_progress(75, "Iniciando servidor…")
 
             def _run_server():
                 try:
@@ -207,65 +201,46 @@ def main() -> None:
                 except Exception as exc:
                     _log(f"uvicorn terminó con error: {exc}")
 
-            server_thread = threading.Thread(target=_run_server, daemon=True, name="uvicorn")
-            server_thread.start()
+            threading.Thread(target=_run_server, daemon=True, name="uvicorn").start()
             _log("Hilo uvicorn iniciado.")
 
             status_url = "http://127.0.0.1:8000/api/status"
-            _log(f"Esperando servidor en {status_url} (máx. 3 min) …")
+            _log(f"Esperando servidor en {status_url} …")
 
-            # Animar 75→95% mientras esperamos al servidor
-            _stop_anim2 = threading.Event()
+            _stop2 = threading.Event()
             def _anim2():
                 t0 = time.monotonic()
-                while not _stop_anim2.is_set():
+                while not _stop2.is_set():
                     elapsed = time.monotonic() - t0
                     pct = 75 + min(20, int(elapsed / 10 * 20))
-                    _set_progress(pct)
+                    set_progress(pct)
                     time.sleep(0.4)
             threading.Thread(target=_anim2, daemon=True).start()
 
             ok = _wait_for_server(status_url, timeout=180.0)
-            _stop_anim2.set()
+            _stop2.set()
 
             if not ok:
                 _result["error"] = "timeout"
                 _log("ERROR: timeout esperando servidor.")
-                splash.destroy()
+                close_splash()
                 return
 
-            _log("Servidor listo. Abriendo ventana principal…")
-            _set_progress(100, "¡Listo!")
-            time.sleep(0.4)
-
-            webview.create_window(
-                title="MyVoices",
-                url="http://127.0.0.1:8000",
-                width=1100,
-                height=760,
-                min_size=(800, 600),
-                text_select=True,
-            )
-            splash.destroy()
-            _log("Splash cerrada, ventana principal abierta.")
+            _log("Servidor listo.")
+            set_progress(100, "¡Listo!")
+            time.sleep(0.35)
+            close_splash()
 
         except Exception:
             tb = traceback.format_exc()
-            _log(f"Error en _load_app:\n{tb}")
+            _log(f"Error en _load_everything:\n{tb}")
             _result["error"] = tb
-            try:
-                splash.destroy()
-            except Exception:
-                pass
+            close_splash()
 
-    try:
-        _log("webview.start (edgechromium) …")
-        webview.start(gui="edgechromium", func=_load_app, debug=False)
-    except Exception as e:
-        _log(f"edgechromium falló ({e}), usando fallback …")
-        webview.start(func=_load_app, debug=False)
+    threading.Thread(target=_load_everything, daemon=True).start()
+    root.mainloop()   # bloquea hasta que close_splash() llame a root.destroy()
 
-    # Errores que ocurrieron dentro de _load_app
+    # ── Errores capturados durante la carga ───────────────────────────────────
     if _result.get("error") == "timeout":
         _show_error(
             "El servidor no respondió en 3 minutos.\n\n"
@@ -282,6 +257,24 @@ def main() -> None:
             f"Log completo:\n{_log_path}"
         )
         sys.exit(1)
+
+    # ── Abrir ventana principal pywebview ─────────────────────────────────────
+    _log("Abriendo ventana pywebview …")
+    import webview  # ya en sys.modules, import instantáneo
+
+    webview.create_window(
+        title="MyVoices",
+        url="http://127.0.0.1:8000",
+        width=1100,
+        height=760,
+        min_size=(800, 600),
+        text_select=True,
+    )
+    try:
+        webview.start(gui="edgechromium", debug=False)
+    except Exception as e:
+        _log(f"edgechromium falló ({e}), usando fallback …")
+        webview.start(debug=False)
 
     _log("Ventana cerrada. MyVoices terminando.")
 
