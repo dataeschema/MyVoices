@@ -693,7 +693,7 @@ function renderPresets() {
     return;
   }
   tbody.innerHTML = allPresets.map(p => `
-    <tr class="preset-row" onclick="loadPresetToForm(${JSON.stringify(p.name)})" title="Clic para editar">
+    <tr class="preset-row" onclick="loadPresetToForm(${JSON.stringify(p.name)}, this)" title="Clic para editar">
       <td><strong>${esc(p.name)}</strong></td>
       <td>${esc(p.voice_name)}</td>
       <td><span class="badge badge-${p.engine}">${esc(p.engine)}</span></td>
@@ -707,7 +707,7 @@ function renderPresets() {
     </tr>`).join('');
 }
 
-function loadPresetToForm(name) {
+function loadPresetToForm(name, rowEl) {
   const p = allPresets.find(x => x.name === name);
   if (!p) return;
 
@@ -736,7 +736,7 @@ function loadPresetToForm(name) {
 
   // Resaltar fila seleccionada
   document.querySelectorAll('#presetsBody .preset-row').forEach(r => r.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
+  if (rowEl) rowEl.classList.add('selected');
 
   // Scroll al formulario
   document.getElementById('presetName').scrollIntoView({ behavior: 'smooth', block: 'center' });
