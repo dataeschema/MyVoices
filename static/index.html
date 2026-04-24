@@ -173,6 +173,9 @@ tr:hover td { background: var(--surface2); }
 /* clickable phrase rows */
 .phrase-row { cursor: pointer; }
 .phrase-row.selected td { background: var(--accent-lo) !important; }
+.preset-row { cursor: pointer; }
+.preset-row:hover td { background: rgba(79,126,247,0.06); }
+.preset-row.selected td { background: var(--accent-lo) !important; }
 
 .badge {
   display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px;
@@ -690,7 +693,7 @@ function renderPresets() {
     return;
   }
   tbody.innerHTML = allPresets.map(p => `
-    <tr>
+    <tr class="preset-row" onclick="loadPresetToForm(${JSON.stringify(p.name)})" title="Clic para editar">
       <td><strong>${esc(p.name)}</strong></td>
       <td>${esc(p.voice_name)}</td>
       <td><span class="badge badge-${p.engine}">${esc(p.engine)}</span></td>
@@ -699,9 +702,44 @@ function renderPresets() {
       <td>${p.pitch > 0 ? '+' : ''}${p.pitch.toFixed(1)} st</td>
       <td>${p.radio_effect ? '📻' : '—'}</td>
       <td>
-        <button class="btn btn-danger btn-sm" onclick="deletePreset('${esc(p.name)}')">✕</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deletePreset('${esc(p.name)}')">✕</button>
       </td>
     </tr>`).join('');
+}
+
+function loadPresetToForm(name) {
+  const p = allPresets.find(x => x.name === name);
+  if (!p) return;
+
+  // Voz
+  document.getElementById('presetVoice').value = p.voice_id;
+
+  // Velocidad
+  const speedEl = document.getElementById('presetSpeed');
+  speedEl.value = p.speed;
+  document.getElementById('speedVal').textContent = parseFloat(p.speed).toFixed(2) + '×';
+
+  // Tono
+  const pitchEl = document.getElementById('presetPitch');
+  pitchEl.value = p.pitch;
+  const pitchSign = p.pitch > 0 ? '+' : '';
+  document.getElementById('pitchVal').textContent = pitchSign + parseFloat(p.pitch).toFixed(1) + ' st';
+
+  // Efecto radio
+  document.getElementById('presetRadio').checked = p.radio_effect;
+
+  // Idioma
+  document.getElementById('presetLang').value = p.language || 'es';
+
+  // Nombre
+  document.getElementById('presetName').value = p.name;
+
+  // Resaltar fila seleccionada
+  document.querySelectorAll('#presetsBody .preset-row').forEach(r => r.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  // Scroll al formulario
+  document.getElementById('presetName').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function populatePresetSelects() {
