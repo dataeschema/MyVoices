@@ -701,8 +701,11 @@ function renderPresets() {
       <td>${p.speed.toFixed(2)}×</td>
       <td>${p.pitch > 0 ? '+' : ''}${p.pitch.toFixed(1)} st</td>
       <td>${p.radio_effect ? '📻' : '—'}</td>
-      <td>
-        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deletePreset('${esc(p.name)}')">✕</button>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm" title="Editar"
+                onclick="event.stopPropagation(); loadPresetToForm(${JSON.stringify(p.name)}, this.closest('tr'))">✎</button>
+        <button class="btn btn-danger btn-sm" title="Eliminar"
+                onclick="event.stopPropagation(); deletePreset('${esc(p.name)}')">✕</button>
       </td>
     </tr>`).join('');
 }
@@ -954,8 +957,12 @@ function renderPhrases() {
       <td style="font-size:11px">${p.voice_preset_name
         ? `<span class="badge badge-xtts">${esc(p.voice_preset_name)}</span>`
         : '<span style="color:var(--muted)">—</span>'}</td>
-      <td><button class="btn btn-danger btn-sm"
-            onclick="event.stopPropagation();deletePhrase(${p.id})">✕</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm" title="Editar"
+                onclick="event.stopPropagation(); loadPhraseToTest(${p.id})">✎</button>
+        <button class="btn btn-danger btn-sm" title="Eliminar"
+                onclick="event.stopPropagation(); deletePhrase(${p.id})">✕</button>
+      </td>
     </tr>`).join('');
 
   // Re-apply selection highlight
