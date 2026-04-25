@@ -4,9 +4,9 @@ Gestiona configuración, voces (XTTS + Piper), presets de voz, frases y logs.
 """
 import logging
 import os
-import sys
-import sqlite3
 import shutil
+import sqlite3
+import sys
 from pathlib import Path
 
 _log = logging.getLogger("myvoices.db")

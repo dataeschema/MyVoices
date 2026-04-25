@@ -1,5 +1,6 @@
 import os
 import sys
+
 import pytest
 
 # Must be set before any import of server.py to skip TTS model loading
@@ -39,8 +40,9 @@ def _mk(p):
 @pytest.fixture()
 def client(tmp_db, monkeypatch):
     """FastAPI TestClient with isolated DB and no TTS model loaded."""
-    import server
     from starlette.testclient import TestClient
+
+    import server
 
     # Point server's cached directory globals to the temp path
     monkeypatch.setattr(server, "VOICES_DIR", tmp_db / "voices")

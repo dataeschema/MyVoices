@@ -1,8 +1,9 @@
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from server import split_into_chunks, _sanitize_name
-
+from server import _sanitize_name, split_into_chunks
 
 # ── split_into_chunks ─────────────────────────────────────────────────────────
 

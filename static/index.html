@@ -156,6 +156,8 @@ textarea { resize: vertical; min-height: 70px; }
 .btn-secondary:hover { background: var(--surface3); }
 .btn-danger    { background: #ef444420; color: var(--danger); border: 1px solid #ef444440; }
 .btn-danger:hover    { background: #ef444435; }
+.btn-edit      { background: #4f7ef720; color: var(--accent); border: 1px solid #4f7ef740; }
+.btn-edit:hover      { background: #4f7ef735; }
 .btn-success   { background: #22c55e20; color: var(--success); border: 1px solid #22c55e40; }
 .btn-success:hover   { background: #22c55e35; }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
@@ -622,6 +624,13 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Escape para usar dentro de un atributo HTML cuyo valor luego se inserta
+//    en una expresión JS (onclick="foo('${escAttr(x)}')"). Cubre además
+//    comilla simple y backslash, que esc() deja pasar.
+function escAttr(s) {
+  return esc(s).replace(/'/g, '&#39;').replace(/\\/g, '\\\\');
+}
+
 // ── Status bar ─────────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
@@ -693,7 +702,7 @@ function renderPresets() {
     return;
   }
   tbody.innerHTML = allPresets.map(p => `
-    <tr class="preset-row" onclick="loadPresetToForm(${JSON.stringify(p.name)}, this)" title="Clic para editar">
+    <tr class="preset-row" data-name="${esc(p.name)}" title="Clic para editar">
       <td><strong>${esc(p.name)}</strong></td>
       <td>${esc(p.voice_name)}</td>
       <td><span class="badge badge-${p.engine}">${esc(p.engine)}</span></td>
@@ -702,13 +711,31 @@ function renderPresets() {
       <td>${p.pitch > 0 ? '+' : ''}${p.pitch.toFixed(1)} st</td>
       <td>${p.radio_effect ? '📻' : '—'}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-sm" title="Editar"
-                onclick="event.stopPropagation(); loadPresetToForm(${JSON.stringify(p.name)}, this.closest('tr'))">✎</button>
-        <button class="btn btn-danger btn-sm" title="Eliminar"
-                onclick="event.stopPropagation(); deletePreset('${esc(p.name)}')">✕</button>
+        <button class="btn btn-edit btn-sm" data-action="edit" title="Editar">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" data-action="delete" title="Eliminar">✕ Eliminar</button>
       </td>
     </tr>`).join('');
 }
+
+// Event delegation — cubre clic de fila (editar) y clics de los botones,
+// inmune a inyección/quoting porque no interpolamos en atributos JS.
+document.addEventListener('DOMContentLoaded', () => {
+  const tbody = document.getElementById('presetsBody');
+  if (!tbody) return;
+  tbody.addEventListener('click', e => {
+    const tr = e.target.closest('tr.preset-row');
+    if (!tr) return;
+    const name = tr.dataset.name;
+    const btn = e.target.closest('button[data-action]');
+    if (btn && btn.dataset.action === 'delete') {
+      e.stopPropagation();
+      deletePreset(name);
+      return;
+    }
+    // Botón editar o clic en cualquier otra parte de la fila
+    loadPresetToForm(name, tr);
+  });
+});
 
 function loadPresetToForm(name, rowEl) {
   const p = allPresets.find(x => x.name === name);
@@ -950,7 +977,7 @@ function renderPhrases() {
     return;
   }
   tbody.innerHTML = allPhrases.map(p => `
-    <tr class="phrase-row" id="phrase-row-${p.id}" onclick="loadPhraseToTest(${p.id})">
+    <tr class="phrase-row" id="phrase-row-${p.id}" data-id="${p.id}">
       <td><code style="color:var(--accent);font-size:12px">${esc(p.name)}</code></td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px"
           title="${esc(p.text)}">${esc(p.text)}</td>
@@ -958,10 +985,8 @@ function renderPhrases() {
         ? `<span class="badge badge-xtts">${esc(p.voice_preset_name)}</span>`
         : '<span style="color:var(--muted)">—</span>'}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-sm" title="Editar"
-                onclick="event.stopPropagation(); loadPhraseToTest(${p.id})">✎</button>
-        <button class="btn btn-danger btn-sm" title="Eliminar"
-                onclick="event.stopPropagation(); deletePhrase(${p.id})">✕</button>
+        <button class="btn btn-edit btn-sm" data-action="edit" title="Editar">✎ Editar</button>
+        <button class="btn btn-danger btn-sm" data-action="delete" title="Eliminar">✕ Eliminar</button>
       </td>
     </tr>`).join('');
 
@@ -971,6 +996,24 @@ function renderPhrases() {
     if (row) row.classList.add('selected');
   }
 }
+
+// Event delegation para frases — mismo patrón que presets
+document.addEventListener('DOMContentLoaded', () => {
+  const tbody = document.getElementById('phrasesBody');
+  if (!tbody) return;
+  tbody.addEventListener('click', e => {
+    const tr = e.target.closest('tr.phrase-row');
+    if (!tr) return;
+    const id = parseInt(tr.dataset.id, 10);
+    const btn = e.target.closest('button[data-action]');
+    if (btn && btn.dataset.action === 'delete') {
+      e.stopPropagation();
+      deletePhrase(id);
+      return;
+    }
+    loadPhraseToTest(id);
+  });
+});
 
 async function deletePhrase(id) {
   if (!confirm('¿Eliminar esta frase?')) return;

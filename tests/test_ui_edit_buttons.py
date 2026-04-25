@@ -1,13 +1,13 @@
 """
-Verifica que los botones de edición (icono lápiz) están presentes en el
-HTML servido y conectados a las funciones JS correctas.
+Verifica que los botones de edición (lápiz) están presentes en el HTML
+servido y conectados a las funciones JS correctas vía event delegation
+con atributos data-*.
 
-Es un test estático sobre static/index.html: busca patrones en
-renderPresets() y renderPhrases() para confirmar que:
-  - Cada fila tiene un botón con el icono ✎
-  - El botón invoca loadPresetToForm / loadPhraseToTest
-  - Lleva event.stopPropagation() para no chocar con el click de la fila
-  - Las funciones destino existen y modifican los campos esperados
+Cambios sobre la versión anterior:
+- Las filas y botones ya NO usan onclick inline, sino data-action / data-id /
+  data-name. Un único listener delegado en cada tbody despacha la acción.
+- Esto elimina la inyección por comillas en nombres de preset y la
+  necesidad de JSON.stringify dentro de atributos HTML.
 """
 import os
 import re
@@ -37,30 +37,93 @@ def _section(html: str, fn_name: str) -> str:
     raise AssertionError(f"unterminated function {fn_name}")
 
 
-# ── Presets ────────────────────────────────────────────────────────────────
+# ── Presets — markup ───────────────────────────────────────────────────────
 
 def test_render_presets_has_pencil_button():
     body = _section(_read(), "renderPresets")
-    assert "✎" in body, "no pencil icon in renderPresets"
+    assert "✎ Editar" in body, "pencil button missing in renderPresets"
 
 
-def test_render_presets_pencil_calls_load_preset_to_form():
+def test_render_presets_uses_data_action():
     body = _section(_read(), "renderPresets")
-    # El botón con ✎ debe invocar loadPresetToForm con el nombre y la fila
+    assert 'data-action="edit"' in body, "preset edit button must use data-action='edit'"
+    assert 'data-action="delete"' in body, "preset delete button must use data-action='delete'"
+
+
+def test_render_presets_row_has_data_name():
+    body = _section(_read(), "renderPresets")
+    assert re.search(r'<tr\s+class="preset-row"\s+data-name="', body), \
+        "preset row must expose data-name attribute"
+
+
+def test_render_presets_no_inline_onclick():
+    body = _section(_read(), "renderPresets")
+    assert "onclick=" not in body, \
+        "renderPresets must not contain inline onclick handlers"
+
+
+def test_render_presets_pencil_uses_edit_style():
+    body = _section(_read(), "renderPresets")
+    assert re.search(r'class="btn btn-edit btn-sm"\s+data-action="edit"', body), \
+        "pencil button must use btn-edit class with data-action='edit'"
+
+
+def test_render_presets_no_unsafe_json_stringify():
+    body = _section(_read(), "renderPresets")
+    assert "JSON.stringify" not in body, \
+        "renderPresets must not embed JSON.stringify inside HTML attributes"
+
+
+# ── Phrases — markup ───────────────────────────────────────────────────────
+
+def test_render_phrases_has_pencil_button():
+    body = _section(_read(), "renderPhrases")
+    assert "✎ Editar" in body, "pencil button missing in renderPhrases"
+
+
+def test_render_phrases_uses_data_action():
+    body = _section(_read(), "renderPhrases")
+    assert 'data-action="edit"' in body
+    assert 'data-action="delete"' in body
+
+
+def test_render_phrases_row_has_data_id():
+    body = _section(_read(), "renderPhrases")
+    assert re.search(r'data-id="\$\{p\.id\}"', body), \
+        "phrase row must expose data-id attribute"
+
+
+def test_render_phrases_no_inline_onclick():
+    body = _section(_read(), "renderPhrases")
+    assert "onclick=" not in body, \
+        "renderPhrases must not contain inline onclick handlers"
+
+
+def test_render_phrases_pencil_uses_edit_style():
+    body = _section(_read(), "renderPhrases")
+    assert re.search(r'class="btn btn-edit btn-sm"\s+data-action="edit"', body)
+
+
+# ── Event delegation ───────────────────────────────────────────────────────
+
+def test_presets_body_event_delegation_present():
+    html = _read()
+    # Debe existir un addEventListener('click') sobre #presetsBody
     assert re.search(
-        r"loadPresetToForm\(\s*\$\{JSON\.stringify\(p\.name\)\}\s*,\s*this\.closest\('tr'\)\s*\)",
-        body,
-    ), "pencil button must call loadPresetToForm(name, this.closest('tr'))"
+        r"getElementById\('presetsBody'\)[\s\S]{0,200}addEventListener\('click'",
+        html,
+    ), "presetsBody must have a delegated click listener"
 
 
-def test_render_presets_pencil_stops_propagation():
-    body = _section(_read(), "renderPresets")
-    # Antes del botón de eliminar (✕) debe haber un stopPropagation para el lápiz
-    pencil_idx = body.index("✎")
-    snippet = body[max(0, pencil_idx - 200):pencil_idx]
-    assert "event.stopPropagation()" in snippet, \
-        "pencil button must call event.stopPropagation()"
+def test_phrases_body_event_delegation_present():
+    html = _read()
+    assert re.search(
+        r"getElementById\('phrasesBody'\)[\s\S]{0,200}addEventListener\('click'",
+        html,
+    ), "phrasesBody must have a delegated click listener"
 
+
+# ── Funciones invocadas por la delegación ──────────────────────────────────
 
 def test_load_preset_to_form_sets_expected_fields():
     body = _section(_read(), "loadPresetToForm")
@@ -70,32 +133,29 @@ def test_load_preset_to_form_sets_expected_fields():
             f"loadPresetToForm must populate #{field_id}"
 
 
-# ── Phrases ────────────────────────────────────────────────────────────────
-
-def test_render_phrases_has_pencil_button():
-    body = _section(_read(), "renderPhrases")
-    assert "✎" in body, "no pencil icon in renderPhrases"
-
-
-def test_render_phrases_pencil_calls_load_phrase_to_test():
-    body = _section(_read(), "renderPhrases")
-    assert re.search(r"loadPhraseToTest\(\$\{p\.id\}\)", body), \
-        "pencil button must call loadPhraseToTest(p.id)"
-
-
-def test_render_phrases_pencil_stops_propagation():
-    body = _section(_read(), "renderPhrases")
-    pencil_idx = body.index("✎")
-    snippet = body[max(0, pencil_idx - 200):pencil_idx]
-    assert "event.stopPropagation()" in snippet, \
-        "pencil button must call event.stopPropagation()"
-
-
 def test_load_phrase_to_test_sets_expected_fields():
     body = _section(_read(), "loadPhraseToTest")
     for field_id in ("testText", "testPreset", "savePhraseName"):
         assert f"getElementById('{field_id}')" in body, \
             f"loadPhraseToTest must populate #{field_id}"
+
+
+# ── escAttr helper ─────────────────────────────────────────────────────────
+
+def test_escAttr_helper_defined():
+    html = _read()
+    assert re.search(r"function\s+escAttr\s*\(", html), \
+        "escAttr() helper must be defined for safe JS-attr interpolation"
+
+
+# ── CSS ────────────────────────────────────────────────────────────────────
+
+def test_btn_edit_class_defined_in_css():
+    html = _read()
+    assert re.search(r"\.btn-edit\s*\{[^}]*background[^}]*\}", html), \
+        "CSS class .btn-edit must be defined"
+    assert re.search(r"\.btn-edit:hover\s*\{[^}]*background[^}]*\}", html), \
+        "CSS class .btn-edit:hover must be defined"
 
 
 # ── Estructura general ─────────────────────────────────────────────────────

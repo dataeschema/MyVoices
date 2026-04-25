@@ -1,7 +1,6 @@
 import io
 import wave
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _dummy_wav_bytes() -> bytes:
@@ -234,3 +233,176 @@ def test_delete_logs(client):
     # so we verify our seeded entry was removed rather than checking for empty list.
     msgs = [l["message"] for l in client.get("/api/logs").json()]
     assert "Entrada para borrar" not in msgs
+
+
+def test_get_logs_filter_by_level(client):
+    import database
+    database.log_event("ERROR", "Falla X")
+    database.log_event("INFO", "Info Y")
+    only_errors = client.get("/api/logs?level=ERROR").json()
+    levels = {l["level"] for l in only_errors}
+    assert levels <= {"ERROR"}
+    assert any(l["message"] == "Falla X" for l in only_errors)
+
+
+def test_get_logs_with_limit(client):
+    import database
+    for i in range(5):
+        database.log_event("INFO", f"línea {i}")
+    res = client.get("/api/logs?limit=2").json()
+    assert len(res) <= 2
+
+
+# ── /api/speak (síntesis mockeada) ────────────────────────────────────────────
+
+def test_speak_requires_text(client):
+    r = client.post("/api/speak", json={"voice": "preset", "text": ""})
+    assert r.status_code == 400
+
+
+def test_speak_requires_voice(client):
+    r = client.post("/api/speak", json={"voice": "", "text": "hola"})
+    assert r.status_code == 400
+
+
+def test_speak_calls_synth_with_preset(client, monkeypatch):
+    import server
+
+    captured = {}
+
+    async def fake_speak(preset, text):
+        captured["preset"] = preset
+        captured["text"]   = text
+        return {"status": "ok", "engine": "test"}
+
+    monkeypatch.setattr(server, "_speak_with_preset", fake_speak)
+    r = client.post("/api/speak", json={"voice": "MiPreset", "text": "Hola chat"})
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok", "engine": "test"}
+    assert captured == {"preset": "MiPreset", "text": "Hola chat"}
+
+
+# ── /api/speak/download ───────────────────────────────────────────────────────
+
+def test_speak_download_requires_text(client):
+    r = client.post("/api/speak/download", json={"voice": "p", "text": ""})
+    assert r.status_code == 400
+
+
+def test_speak_download_returns_wav(client, monkeypatch, tmp_path):
+    import server
+
+    wav_path = tmp_path / "fake.wav"
+    wav_path.write_bytes(_dummy_wav_bytes())
+
+    def fake_synth(preset, text):
+        return str(wav_path)
+
+    monkeypatch.setattr(server, "_synth_to_file_sync", fake_synth)
+    r = client.post("/api/speak/download",
+                    json={"voice": "MiPreset", "text": "Hola"})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("audio/wav")
+    assert "myvoices_MiPreset.wav" in r.headers.get("content-disposition", "")
+    assert r.content[:4] == b"RIFF"
+
+
+def test_speak_download_propagates_value_error(client, monkeypatch):
+    import server
+
+    def boom(preset, text):
+        raise ValueError("preset no encontrado")
+
+    monkeypatch.setattr(server, "_synth_to_file_sync", boom)
+    r = client.post("/api/speak/download",
+                    json={"voice": "X", "text": "y"})
+    assert r.status_code == 400
+    assert "preset no encontrado" in r.json()["detail"]
+
+
+# ── /api/phrases/{name}/play ──────────────────────────────────────────────────
+
+def test_play_phrase_by_name(client, monkeypatch):
+    import server
+
+    captured = {}
+
+    async def fake_speak(preset, text):
+        captured["preset"] = preset
+        captured["text"]   = text
+        return {"status": "ok"}
+
+    monkeypatch.setattr(server, "_speak_with_preset", fake_speak)
+
+    # Setup: create voice → preset → phrase
+    vid = _create_voice(client, "VozPlay").json()["id"]
+    _create_preset(client, vid, name="PresetPlay")
+    client.post("/api/phrases", data={
+        "name":              "saludo",
+        "text":              "Hola streamers",
+        "voice_preset_name": "PresetPlay",
+    })
+
+    r = client.post("/api/phrases/saludo/play")
+    assert r.status_code == 200
+    assert captured["text"] == "Hola streamers"
+    assert captured["preset"] == "PresetPlay"
+
+
+def test_play_phrase_not_found(client):
+    r = client.post("/api/phrases/no-existe/play")
+    assert r.status_code == 404
+
+
+# ── /api/piper/available (catálogo mockeado) ──────────────────────────────────
+
+def test_piper_available_lists_voices(client, monkeypatch):
+    import server
+
+    fake_catalog = {
+        "es_ES-mls_10246-low": {
+            "name":     "mls_10246",
+            "language": {"code": "es_ES", "name_english": "Spanish"},
+            "quality":  "low",
+            "num_speakers": 1,
+            "files": {"f.onnx": {"size_bytes": 1_048_576}},
+        },
+        "en_US-amy-medium": {
+            "name":     "amy",
+            "language": {"code": "en_US", "name_english": "English"},
+            "quality":  "medium",
+            "num_speakers": 1,
+            "files": {"f.onnx": {"size_bytes": 2_097_152}},
+        },
+    }
+
+    # Reset the cache and inject our fake
+    monkeypatch.setattr(server, "_voices_json_cache", fake_catalog)
+    monkeypatch.setattr(server, "_voices_json_time", 9_999_999_999)
+
+    r = client.get("/api/piper/available")
+    assert r.status_code == 200
+    keys = [v["key"] for v in r.json()]
+    assert "es_ES-mls_10246-low" in keys
+    assert "en_US-amy-medium" in keys
+
+
+def test_piper_available_filter_by_language(client, monkeypatch):
+    import server
+    fake_catalog = {
+        "es_ES-x-low": {
+            "name": "x", "language": {"code": "es_ES", "name_english": "Spanish"},
+            "quality": "low", "num_speakers": 1, "files": {},
+        },
+        "en_US-y-low": {
+            "name": "y", "language": {"code": "en_US", "name_english": "English"},
+            "quality": "low", "num_speakers": 1, "files": {},
+        },
+    }
+    monkeypatch.setattr(server, "_voices_json_cache", fake_catalog)
+    monkeypatch.setattr(server, "_voices_json_time", 9_999_999_999)
+
+    r = client.get("/api/piper/available?lang=es")
+    assert r.status_code == 200
+    codes = {v["language_code"] for v in r.json()}
+    assert codes == {"es_ES"}

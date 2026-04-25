@@ -39,6 +39,13 @@ config.json
 exe_test.log
 build_out.txt
 
+# ── Coverage / pytest ─────────────────────────────────────────────────────────
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+
 # ── IDEs y editores ───────────────────────────────────────────────────────────
 .vscode/
 .idea/

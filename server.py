@@ -2,6 +2,7 @@ import os
 import sys
 import types
 
+
 # ── Workaround: llvmlite.dll bloqueado por Windows App Control ────────────────
 def _mock_numba_and_llvmlite():
     def _noop(*args, **kwargs):
@@ -47,7 +48,8 @@ _mock_numba_and_llvmlite()
 
 if getattr(sys, "frozen", False):
     # console=False → stdin/stdout/stderr son None; TTS llama input() para los ToS.
-    import io, builtins
+    import builtins
+    import io
     if sys.stdin  is None: sys.stdin  = io.StringIO("y\n")
     if sys.stdout is None: sys.stdout = io.StringIO()
     if sys.stderr is None: sys.stderr = io.StringIO()
@@ -61,28 +63,46 @@ if getattr(sys, "frozen", False):
             pass
         os.environ["PATH"] = _torch_lib + os.pathsep + os.environ.get("PATH", "")
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
-from starlette.background import BackgroundTask
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 import asyncio
 import json
+import logging
 import urllib.request
 import wave as wave_module
+
 import torch
-import logging
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 _log = logging.getLogger("myvoices")
 
 from database import (
-    init_db, load_config, save_config,
-    get_voices_dir, get_static_dir, get_piper_dir,
-    list_voices, get_voice, add_voice, rename_voice, remove_voice,
-    list_voice_presets, save_voice_preset, load_voice_preset, delete_voice_preset,
-    list_phrases, save_phrase, update_phrase, delete_phrase,
-    get_phrase, get_phrase_by_name,
-    log_event, get_logs, clear_logs,
+    add_voice,
+    clear_logs,
+    delete_phrase,
+    delete_voice_preset,
+    get_logs,
+    get_phrase,
+    get_phrase_by_name,
+    get_piper_dir,
+    get_static_dir,
+    get_voice,
+    get_voices_dir,
+    init_db,
+    list_phrases,
+    list_voice_presets,
+    list_voices,
+    load_config,
+    load_voice_preset,
+    log_event,
+    remove_voice,
+    rename_voice,
+    save_config,
+    save_phrase,
+    save_voice_preset,
+    update_phrase,
 )
 
 # ── Soporte Piper TTS ─────────────────────────────────────────────────────────
@@ -107,6 +127,7 @@ torch.load = _torch_load_compat
 
 # ── Compatibilidad torchaudio ─────────────────────────────────────────────────
 import torchaudio as _ta
+
 try:
     _ta.set_audio_backend("soundfile")
 except Exception:
@@ -153,18 +174,20 @@ try:
 except Exception:
     pass
 
-from TTS.api import TTS
-import pygame
-import threading
-import tempfile
-import time
-import shutil
 import queue
 import re
-import numpy as np
+import shutil
+import tempfile
+import threading
+import time
 from pathlib import Path
+
+import numpy as np
+import pygame
 from scipy import signal as scipy_signal
 from scipy.io import wavfile as scipy_wavfile
+from TTS.api import TTS
+
 
 # ── Logging handler → SQLite ──────────────────────────────────────────────────
 class _DBLogHandler(logging.Handler):

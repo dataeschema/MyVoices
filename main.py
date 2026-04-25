@@ -8,13 +8,12 @@ Flujo:
   4. Cuando el servidor responde, se cierra la splash y se abre webview.
 """
 import os
-import sys
 import queue
+import sys
 import threading
 import time
-import traceback
 import tkinter as tk
-
+import traceback
 
 # ── Log de arranque ───────────────────────────────────────────────────────────
 
@@ -187,6 +186,7 @@ def main() -> None:
 
             _log("Importando server.py …")
             import uvicorn
+
             from server import app
             _log("server.py importado OK.")
 
