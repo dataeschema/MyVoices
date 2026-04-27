@@ -201,6 +201,44 @@ tr:hover td { background: var(--surface2); }
   color: #a5c1f0; white-space: pre; overflow-x: auto;
 }
 
+/* ── Help / workflow tab ────────────────────────────────────────────────── */
+.help-flow { display: flex; flex-direction: column; gap: 14px; }
+.help-step {
+  display: flex; gap: 16px; align-items: flex-start;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px;
+}
+.help-step-num {
+  flex: 0 0 38px; height: 38px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.help-step-body { flex: 1; }
+.help-step-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.help-step-text  { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.help-params { color: var(--muted); font-size: 13px; margin: 6px 0 6px 18px; line-height: 1.7; }
+.help-arrow { text-align: center; color: var(--accent); font-size: 22px; opacity: .55; }
+.help-step-title-3 {
+  text-align: center; font-weight: 600; font-size: 15px;
+  color: var(--accent); margin: 4px 0 6px;
+}
+.help-branches {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.help-branch {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px; position: relative;
+}
+.help-branch-num {
+  position: absolute; top: 10px; right: 12px;
+  font-size: 11px; color: var(--muted); font-weight: 600;
+}
+.help-branch-title { font-weight: 600; font-size: 14px; padding-right: 36px; }
+.help-branch-text  { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.help-branch .code-block { font-size: 11.5px; padding: 10px 12px; }
+
 /* ── Log viewer ─────────────────────────────────────────────────────────── */
 details summary {
   cursor: pointer; user-select: none;
@@ -276,6 +314,7 @@ details[open] summary::before { transform: rotate(90deg); }
     <button class="tab-btn active" data-tab="main">Principal</button>
     <button class="tab-btn" data-tab="xtts">🎤 XTTS2</button>
     <button class="tab-btn" data-tab="piper">🤖 Piper</button>
+    <button class="tab-btn" data-tab="help">❓ Ayuda</button>
   </nav>
   <div class="header-right"></div>
 </header>
@@ -386,7 +425,8 @@ details[open] summary::before { transform: rotate(90deg); }
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-success" id="testBtn" onclick="testSpeak()">▶ Reproducir</button>
-        <button class="btn btn-secondary" id="downloadBtn" onclick="testDownload()">⬇ Descargar audio</button>
+        <button class="btn btn-secondary" id="downloadBtn" onclick="testDownload()" disabled
+                title="Reproduce primero un texto para guardarlo">⬇ Descargar audio</button>
       </div>
       <!-- Guardar frase desde el panel de prueba -->
       <div class="save-phrase-row">
@@ -554,6 +594,114 @@ details[open] summary::before { transform: rotate(90deg); }
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ══════════════════════ TAB: AYUDA ═══════════════════════════════════════ -->
+<div class="tab-panel" id="tab-help">
+  <div class="card" style="max-width:980px;margin:0 auto">
+    <div class="card-title">❓ Flujo de trabajo</div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:24px">
+      MyVoices se usa en tres pasos: <b>1)</b> registrar una voz, <b>2)</b> crear un preset
+      con sus parámetros, <b>3)</b> usar el preset para reproducir, guardar o llamar desde la API.
+    </p>
+
+    <div class="help-flow">
+      <!-- Paso 1 -->
+      <div class="help-step">
+        <div class="help-step-num">1</div>
+        <div class="help-step-body">
+          <div class="help-step-title">Clonar o crear una voz</div>
+          <div class="help-step-text">
+            En la pestaña <b>🎤 XTTS2</b> sube un archivo <code>.wav</code> de referencia
+            (10-30 s de habla limpia) para clonar una voz, o en <b>🤖 Piper</b>
+            descarga una voz neuronal del catálogo (sin GPU, más rápida).
+          </div>
+        </div>
+      </div>
+
+      <div class="help-arrow">↓</div>
+
+      <!-- Paso 2 -->
+      <div class="help-step">
+        <div class="help-step-num">2</div>
+        <div class="help-step-body">
+          <div class="help-step-title">Crear un preset con parámetros</div>
+          <div class="help-step-text">
+            En la pestaña <b>Principal</b>, sección <i>Configurar preset de voz</i>,
+            elige una voz y ajusta:
+          </div>
+          <ul class="help-params">
+            <li><b>Velocidad</b> — más lento o más rápido</li>
+            <li><b>Tono</b> — más grave o más agudo (semitonos)</li>
+            <li><b>Idioma</b> — solo aplica a XTTS2</li>
+            <li><b>Efecto radio</b> — bandpass + clipping para sonido walkie-talkie</li>
+          </ul>
+          <div class="help-step-text">Guarda con un nombre — ese nombre es lo que se usa en la API.</div>
+        </div>
+      </div>
+
+      <div class="help-arrow">↓</div>
+
+      <!-- Paso 3: divergencia -->
+      <div class="help-step-title-3">3. Usar el preset</div>
+      <div class="help-branches">
+
+        <div class="help-branch">
+          <div class="help-branch-num">3.1</div>
+          <div class="help-branch-title">▶ Probar el preset</div>
+          <div class="help-branch-text">
+            En el <i>Panel de prueba</i> selecciona el preset, escribe un texto y pulsa
+            <b>Reproducir</b>.
+          </div>
+        </div>
+
+        <div class="help-branch">
+          <div class="help-branch-num">3.2</div>
+          <div class="help-branch-title">⬇ Guardar el audio</div>
+          <div class="help-branch-text">
+            Tras reproducir, pulsa <b>Descargar audio</b> — guarda exactamente el WAV
+            que acabas de oír (no se vuelve a sintetizar).
+          </div>
+        </div>
+
+        <div class="help-branch">
+          <div class="help-branch-num">3.3</div>
+          <div class="help-branch-title">💾 Guardar como frase</div>
+          <div class="help-branch-text">
+            Escribe un nombre en <i>Guardar frase</i> y guarda. La frase queda
+            asociada al preset y reproducible por nombre vía API.
+          </div>
+        </div>
+
+        <div class="help-branch">
+          <div class="help-branch-num">3.4</div>
+          <div class="help-branch-title">📡 Llamar a la API con frase guardada</div>
+          <pre class="code-block">POST http://localhost:8000/api/phrases/{nombre}/play</pre>
+          <div class="help-branch-text">
+            Reproduce la frase guardada con su preset asociado. Útil para SAMMI, OBS,
+            o cualquier sistema que dispare nombres fijos.
+          </div>
+        </div>
+
+        <div class="help-branch">
+          <div class="help-branch-num">3.5</div>
+          <div class="help-branch-title">📡 Llamar a la API con voz + texto</div>
+          <pre class="code-block">POST http://localhost:8000/api/speak
+Content-Type: application/json
+
+{
+  "voice": "nombre_del_preset",
+  "text":  "Hola chat, bienvenidos al stream!"
+}</pre>
+          <div class="help-branch-text">
+            Sintetiza y reproduce texto arbitrario con un preset. Para descargar el
+            WAV directamente en lugar de reproducirlo, usa <code>POST /api/speak/download</code>.
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 </div>
 
@@ -827,6 +975,11 @@ async function deletePreset(name) {
 }
 
 // ── Test speak ─────────────────────────────────────────────────────────────
+// Tras una reproducción exitosa, el preset usado queda registrado para que
+// "Descargar audio" pueda guardar exactamente el mismo audio (servido por
+// /api/speak/last sin re-sintetizar).
+let _lastPlayedPreset = null;
+
 async function testSpeak() {
   const preset = document.getElementById('testPreset').value;
   const text   = document.getElementById('testText').value.trim();
@@ -834,6 +987,7 @@ async function testSpeak() {
   if (!text)   { showToast('Escribe un texto', 'error'); return; }
 
   const btn = document.getElementById('testBtn');
+  const dl  = document.getElementById('downloadBtn');
   btn.disabled = true; btn.textContent = '⌛ Sintetizando…';
   try {
     const res = await fetch('/api/speak', {
@@ -841,57 +995,59 @@ async function testSpeak() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ voice: preset, text }),
     });
-    if (res.ok) showToast('Reproduciendo…', 'success');
-    else { const e = await res.json(); showToast(e.detail || 'Error', 'error'); }
+    if (res.ok) {
+      showToast('Reproduciendo…', 'success');
+      _lastPlayedPreset = preset;
+      dl.disabled = false;
+      dl.title = 'Guarda exactamente el audio que se acaba de reproducir';
+    } else {
+      const e = await res.json(); showToast(e.detail || 'Error', 'error');
+    }
   } finally {
     btn.disabled = false; btn.textContent = '▶ Reproducir';
   }
 }
 
 // ── Download audio ─────────────────────────────────────────────────────────
+// No re-sintetiza: pide al servidor el WAV cacheado en /api/speak/last,
+// que es el mismo audio que se acaba de reproducir.
 async function testDownload() {
-  const preset = document.getElementById('testPreset').value;
-  const text   = document.getElementById('testText').value.trim();
-  if (!preset) { showToast('Selecciona un preset', 'error'); return; }
-  if (!text)   { showToast('Escribe un texto', 'error'); return; }
-
   const btn = document.getElementById('downloadBtn');
-  btn.disabled = true; btn.textContent = '⌛ Generando…';
+  btn.disabled = true; btn.textContent = '⌛ Descargando…';
   try {
-    const res = await fetch('/api/speak/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voice: preset, text }),
-    });
-    if (res.ok) {
-      const blob     = await res.blob();
-      const safeName = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.wav`;
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: safeName,
-            types: [{ description: 'Audio WAV', accept: { 'audio/wav': ['.wav'] } }],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          showToast('Audio guardado', 'success');
-        } catch (err) {
-          if (err.name !== 'AbortError') throw err;
-        }
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a   = document.createElement('a');
-        a.href = url; a.download = safeName;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
-        showToast('Audio descargado', 'success');
+    const res = await fetch('/api/speak/last');
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      showToast(e.detail || 'No hay audio para guardar', 'error');
+      return;
+    }
+    const blob     = await res.blob();
+    const preset   = _lastPlayedPreset || 'audio';
+    const safeName = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.wav`;
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: safeName,
+          types: [{ description: 'Audio WAV', accept: { 'audio/wav': ['.wav'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        showToast('Audio guardado', 'success');
+      } catch (err) {
+        if (err.name !== 'AbortError') throw err;
       }
     } else {
-      const e = await res.json(); showToast(e.detail || 'Error al generar audio', 'error');
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href = url; a.download = safeName;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast('Audio descargado', 'success');
     }
   } finally {
-    btn.disabled = false; btn.textContent = '⬇ Descargar audio';
+    btn.disabled = !_lastPlayedPreset;
+    btn.textContent = '⬇ Descargar audio';
   }
 }
 
