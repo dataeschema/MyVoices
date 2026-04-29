@@ -39,6 +39,9 @@ config.json
 exe_test.log
 build_out.txt
 
+# ── build.bat user state ─────────────────────────────────────────────────────
+.build_config
+
 # ── Coverage / pytest ─────────────────────────────────────────────────────────
 .coverage
 .coverage.*

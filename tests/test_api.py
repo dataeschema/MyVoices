@@ -265,21 +265,98 @@ def test_speak_requires_voice(client):
     assert r.status_code == 400
 
 
-def test_speak_calls_synth_with_preset(client, monkeypatch):
+def test_speak_synthesizes_caches_and_starts_playback(client, monkeypatch, tmp_path):
+    """`/api/speak` debe sintetizar un fichero, guardarlo en _last_speak_path
+    y arrancar la reproducción en background."""
     import server
 
     captured = {}
 
-    async def fake_speak(preset, text):
+    wav = tmp_path / "speak.wav"
+    wav.write_bytes(_dummy_wav_bytes())
+
+    def fake_synth(preset, text):
         captured["preset"] = preset
         captured["text"]   = text
-        return {"status": "ok", "engine": "test"}
+        return str(wav)
 
-    monkeypatch.setattr(server, "_speak_with_preset", fake_speak)
+    played: list = []
+    def fake_play(path):
+        played.append(path)
+
+    monkeypatch.setattr(server, "_synth_to_file_sync", fake_synth)
+    monkeypatch.setattr(server, "play_audio_keep",     fake_play)
+    monkeypatch.setattr(server, "_last_speak_path",    None)
+
     r = client.post("/api/speak", json={"voice": "MiPreset", "text": "Hola chat"})
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "engine": "test"}
+    assert r.json()["status"] == "success"
     assert captured == {"preset": "MiPreset", "text": "Hola chat"}
+    assert server._last_speak_path == str(wav)
+
+
+def test_speak_propagates_value_error(client, monkeypatch):
+    import server
+
+    def boom(preset, text):
+        raise ValueError("preset 'X' no encontrado")
+
+    monkeypatch.setattr(server, "_synth_to_file_sync", boom)
+    monkeypatch.setattr(server, "play_audio_keep", lambda p: None)
+    r = client.post("/api/speak", json={"voice": "X", "text": "y"})
+    assert r.status_code == 400
+    assert "no encontrado" in r.json()["detail"]
+
+
+def test_speak_replaces_previous_cache_file(client, monkeypatch, tmp_path):
+    """Una nueva llamada a /api/speak debe borrar el WAV cacheado anterior."""
+    import server
+
+    old = tmp_path / "old.wav"; old.write_bytes(_dummy_wav_bytes())
+    new = tmp_path / "new.wav"; new.write_bytes(_dummy_wav_bytes())
+
+    monkeypatch.setattr(server, "_last_speak_path", str(old))
+    monkeypatch.setattr(server, "_synth_to_file_sync", lambda p, t: str(new))
+    monkeypatch.setattr(server, "play_audio_keep", lambda p: None)
+
+    r = client.post("/api/speak", json={"voice": "p", "text": "t"})
+    assert r.status_code == 200
+    assert server._last_speak_path == str(new)
+    assert not old.exists(), "el WAV cacheado anterior debe borrarse"
+    assert new.exists()
+
+
+# ── /api/speak/last ───────────────────────────────────────────────────────────
+
+def test_speak_last_returns_cached_wav(client, monkeypatch, tmp_path):
+    import server
+
+    wav = tmp_path / "last.wav"
+    wav.write_bytes(_dummy_wav_bytes())
+    monkeypatch.setattr(server, "_last_speak_path", str(wav))
+
+    r = client.get("/api/speak/last")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("audio/wav")
+    assert r.content[:4] == b"RIFF"
+
+
+def test_speak_last_404_when_no_cache(client, monkeypatch):
+    import server
+    monkeypatch.setattr(server, "_last_speak_path", None)
+
+    r = client.get("/api/speak/last")
+    assert r.status_code == 404
+    assert "Reproduce" in r.json()["detail"]
+
+
+def test_speak_last_404_when_file_missing(client, monkeypatch, tmp_path):
+    """Si el path está cacheado pero el fichero ya no existe, debe ser 404."""
+    import server
+    monkeypatch.setattr(server, "_last_speak_path", str(tmp_path / "ghost.wav"))
+
+    r = client.get("/api/speak/last")
+    assert r.status_code == 404
 
 
 # ── /api/speak/download ───────────────────────────────────────────────────────

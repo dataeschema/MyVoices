@@ -70,7 +70,9 @@ def _conn() -> sqlite3.Connection:
 # ── Configuración por defecto ─────────────────────────────────────────────────
 
 _DEFAULT_CONFIG: dict[str, str] = {
-    "language": "es",
+    "language":    "es",
+    "mcp_enabled": "false",  # MCP HTTP endpoint disabled by default
+    "mcp_token":   "",       # Bearer token, generated on first enable
 }
 
 _LOG_MAX_ROWS  = 600_000
@@ -197,7 +199,14 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
-    rows = [(k, str(cfg[k])) for k in _DEFAULT_CONFIG if k in cfg]
+    rows = []
+    for k in _DEFAULT_CONFIG:
+        if k not in cfg:
+            continue
+        v = cfg[k]
+        if isinstance(v, bool):
+            v = "true" if v else "false"
+        rows.append((k, str(v)))
     with _conn() as db:
         db.executemany(
             "INSERT INTO config (key, value) VALUES (?, ?) "

@@ -1,5 +1,7 @@
 # MyVoices — Guía para generar el ejecutable de escritorio
 
+**Español** · [English](BUILD_GUIDE.md)
+
 Cómo convertir MyVoices en un `.exe` para Windows usando **PyInstaller** y **pywebview**.
 
 ---
@@ -76,25 +78,32 @@ El script hace todo de forma autónoma:
 
 1. Verifica que Python 3.10+ está en el PATH
 2. Crea el entorno virtual `venv` si no existe
-3. **Pregunta qué GPU tienes** (menú interactivo):
+3. **Pregunta qué GPU tienes la primera vez** y guarda la elección en `.build_config`. Builds posteriores no preguntan:
    ```
    Selecciona tu GPU:
      [1] RTX 50xx (Blackwell)        - CUDA 12.8
      [2] RTX 20xx / 30xx / 40xx      - CUDA 12.4  (recomendado para la mayoria)
      [3] Sin GPU / Solo CPU
    ```
-4. Instala PyTorch con la versión CUDA correcta
-5. Instala `requirements.txt`
-6. Re-fija `numpy<2.0` y `networkx<3.0` (incompatibles con gruut si se actualizan)
-7. Instala PyInstaller ≥ 6.0
-8. Mata `MyVoices.exe` si está en ejecución
-9. Limpia builds anteriores (`dist\MyVoices\`, `build\`)
-10. Compila con `MyVoices.spec`
-11. Muestra la ruta del exe al terminar
+4. Detecta si PyTorch ya está instalado con la versión CUDA correcta y se la salta si es así (el reinstall completo gasta ~5 GB; ahorrarlo agiliza mucho los builds incrementales)
+5. Instala `requirements.txt` (incluye `numpy<2.0` y `networkx<3.0` ya pineados)
+6. Instala `requirements-dev.txt` (incluye `pyinstaller>=6.0`, `pytest`, `ruff`)
+7. Mata `MyVoices.exe` solo si está realmente en ejecución
+8. Limpia builds anteriores (`dist\MyVoices\`, `build\`)
+9. Compila con `MyVoices.spec` (`--clean` para evitar caché stale)
+10. Reporta duración y tamaño del bundle al terminar
 
 ```bat
 build.bat
 ```
+
+#### Banderas opcionales
+
+| Bandera | Para qué |
+|---|---|
+| `--reset-gpu` | Olvida la GPU cacheada en `.build_config` y vuelve a preguntar |
+| `--skip-deps` | Salta instalación de PyTorch + `requirements.txt` + `requirements-dev.txt`. Útil si solo cambiaste `static/index.html` o el `.spec` |
+| `--ci` | Modo no interactivo: no hay `pause` final ni prompt; falla si `.build_config` no existe |
 
 El ejecutable final queda en: `dist\MyVoices\MyVoices.exe`
 
@@ -240,7 +249,7 @@ venv\Scripts\activate
 pip install "numpy<2.0.0" "networkx<3.0.0"
 ```
 
-`build.bat` ejecuta este paso automáticamente al final, después de instalar `requirements.txt`.
+Las restricciones (`numpy<2.0.0`, `networkx<3.0.0`) ya están pineadas en `requirements.txt`, por lo que `pip install -r requirements.txt` mantiene las versiones compatibles automáticamente.
 
 ### La ventana no se abre (timeout del servidor)
 
