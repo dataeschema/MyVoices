@@ -1,5 +1,7 @@
 # MyVoices — Guía para generar el ejecutable de escritorio
 
+**Español** · [English](BUILD_GUIDE.md)
+
 Cómo convertir MyVoices en un `.exe` para Windows usando **PyInstaller** y **pywebview**.
 
 ---

@@ -306,6 +306,11 @@ _audio_lock = threading.Lock()
 if os.getenv("SKIP_MODEL_LOAD") != "1":
     pygame.mixer.init()
 
+# Última síntesis cacheada por /api/speak para que /api/speak/last devuelva
+# exactamente el mismo audio que se reprodujo (sin re-sintetizar).
+_last_speak_path: str | None = None
+_last_speak_lock = threading.Lock()
+
 app.mount("/static", StaticFiles(directory=str(get_static_dir())), name="static")
 
 # ── Helpers de síntesis ───────────────────────────────────────────────────────
@@ -413,6 +418,16 @@ def play_audio(file_path: str) -> None:
         os.remove(file_path)
     except Exception:
         pass
+
+
+def play_audio_keep(file_path: str) -> None:
+    """Reproduce sin borrar el fichero (para que /api/speak/last pueda servirlo)."""
+    with _audio_lock:
+        pygame.mixer.music.load(file_path)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(0.1)
+        pygame.mixer.music.unload()
 
 
 def _sanitize_name(name: str) -> str:
@@ -981,7 +996,39 @@ async def api_speak(req: SpeakRequest):
         raise HTTPException(400, "El campo 'text' no puede estar vacío")
     if not req.voice.strip():
         raise HTTPException(400, "El campo 'voice' (nombre del preset) no puede estar vacío")
-    return await _speak_with_preset(req.voice.strip(), req.text.strip())
+
+    voice = req.voice.strip()
+    text  = req.text.strip()
+
+    # Sintetizamos a un único fichero (mismo path que /api/speak/download)
+    # y lo cacheamos antes de reproducir. Así /api/speak/last devuelve
+    # exactamente el mismo audio que el usuario acaba de oír.
+    try:
+        path = await asyncio.to_thread(_synth_to_file_sync, voice, text)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    global _last_speak_path
+    with _last_speak_lock:
+        old = _last_speak_path
+        _last_speak_path = path
+    if old and old != path:
+        try: os.remove(old)
+        except Exception: pass
+
+    threading.Thread(target=play_audio_keep, args=(path,), daemon=True).start()
+
+    return {"status": "success", "message": "Reproduciendo audio..."}
+
+
+@app.get("/api/speak/last")
+async def api_speak_last():
+    """Devuelve el último audio sintetizado por /api/speak."""
+    with _last_speak_lock:
+        path = _last_speak_path
+    if not path or not os.path.exists(path):
+        raise HTTPException(404, "No hay audio reciente. Reproduce primero un texto.")
+    return FileResponse(path, media_type="audio/wav", filename="myvoices_last.wav")
 
 
 @app.post("/api/speak/download")
