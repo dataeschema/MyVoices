@@ -19,6 +19,7 @@ Desktop TTS app for streaming. Reads text with cloned voices using **XTTSv2** (G
 - **Log viewer**: activity log with auto-refresh, level filter and automatic rotation
 - **Tests**: 121 unit and integration tests (DB, utils, API CRUD, UI markup), runnable without GPU
 - **CI**: GitHub Actions runs ruff + pytest on every push and PR
+- **MCP server**: optional Model Context Protocol server so an LLM (Claude Desktop, etc.) can list voices, speak text, and play saved phrases through the same REST API
 
 ---
 
@@ -150,6 +151,54 @@ Returns the WAV file directly (Content-Disposition: attachment).
 ```
 POST http://localhost:8000/api/phrases/{name}/play
 ```
+
+---
+
+## MCP server (optional)
+
+Expose MyVoices to an AI model via the [Model Context Protocol](https://modelcontextprotocol.io). The MCP server is a thin wrapper over the REST API — it lists voices/presets/phrases and triggers speech, all from inside an LLM tool call.
+
+```bash
+# 1. Install the MCP dependencies in the same venv
+pip install -r requirements-mcp.txt
+
+# 2. Make sure MyVoices is running (the desktop app or `python main.py`)
+
+# 3. Run the MCP server (manually for testing, or wire it to Claude Desktop below)
+python mcp_server.py
+```
+
+Tools exposed:
+
+| Tool | What it does |
+|---|---|
+| `get_status` | Server health: TTS engine, device, voice/preset counts |
+| `list_voices` | Registered voices (XTTS clones + Piper) |
+| `list_presets` | Voice presets (voice + speed/pitch/lang/radio) |
+| `list_phrases` | Saved phrases with their attached preset |
+| `speak(voice, text)` | Synthesize and play `text` with the named preset |
+| `play_phrase(name)` | Play a saved phrase by name |
+| `download_last_audio` | Metadata for the last cached WAV |
+
+### Claude Desktop config
+
+Add this entry to `claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "myvoices": {
+      "command": "C:/path/to/MyVoices/venv/Scripts/python.exe",
+      "args":    ["C:/path/to/MyVoices/mcp_server.py"],
+      "env":     { "MYVOICES_URL": "http://localhost:8000" }
+    }
+  }
+}
+```
+
+Restart Claude Desktop and ask it to "list available voices" or "speak hello with the Locutor preset".
+
+> The MCP server only redirects HTTP calls — the MyVoices app must be running on `MYVOICES_URL` (default `http://localhost:8000`) before the model invokes a tool.
 
 ---
 

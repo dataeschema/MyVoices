@@ -106,15 +106,15 @@ def test_help_tab_panel_exists():
         "tab-help panel must exist"
 
 
-def test_help_tab_has_three_main_steps():
+def test_help_tab_has_main_steps():
     html = _read()
-    # Buscar los 3 numerales de paso (.help-step-num) en el panel
-    panel = re.search(r'id="tab-help"[\s\S]*?</div>\s*</div>\s*</div>(?=\s*</div><!-- /content)', html)
+    panel = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html)
     assert panel, "could not isolate help tab panel"
     body = panel.group(0)
     nums = re.findall(r'class="help-step-num">(\d)</div>', body)
-    assert nums == ["1", "2"], f"expected steps 1 and 2, got {nums}"
-    # El paso 3 se renderiza con título + branches (3.1-3.5)
+    # Pasos 1 (clonar voz), 2 (preset) y 4 (MCP) tienen card con numeral.
+    # El paso 3 (usar el preset) se renderiza con un título + 5 branches.
+    assert nums == ["1", "2", "4"], f"expected steps 1, 2 and 4, got {nums}"
     assert "help-step-title-3" in body, "missing 3rd step title"
 
 
@@ -158,3 +158,42 @@ def test_help_tab_has_dedicated_css():
                 ".help-branch"):
         assert re.search(rf"{re.escape(cls)}\s*\{{", html), \
             f"CSS rule {cls} must be defined"
+
+
+# ── 3. MCP section in help tab ─────────────────────────────────────────────
+
+def test_help_tab_has_mcp_section():
+    html = _read()
+    panel_match = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html)
+    assert panel_match
+    body = panel_match.group(0)
+    assert "MCP" in body, "help tab must mention MCP"
+    assert "Model Context Protocol" in body, \
+        "help tab must explain Model Context Protocol"
+
+
+def test_help_mcp_lists_main_tools():
+    html = _read()
+    panel = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html).group(0)
+    for tool in ("speak", "play_phrase", "list_voices", "list_presets",
+                 "list_phrases", "download_last_audio", "get_status"):
+        assert f"<code>{tool}" in panel or f">{tool}<" in panel, \
+            f"MCP tool {tool!r} missing in help tab"
+
+
+def test_help_mcp_shows_install_command():
+    html = _read()
+    panel = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html).group(0)
+    assert "requirements-mcp.txt" in panel, \
+        "help tab must show MCP install command"
+
+
+def test_help_mcp_shows_claude_desktop_config():
+    html = _read()
+    panel = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html).group(0)
+    assert "claude_desktop_config.json" in panel, \
+        "help tab must show Claude Desktop config path"
+    assert "mcpServers" in panel, \
+        "help tab must show mcpServers JSON key"
+    assert "MYVOICES_URL" in panel, \
+        "help tab must mention MYVOICES_URL env var"

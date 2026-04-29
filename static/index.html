@@ -701,6 +701,46 @@ Content-Type: application/json
         </div>
 
       </div>
+
+      <div class="help-arrow">↓</div>
+
+      <!-- Paso 4: MCP -->
+      <div class="help-step">
+        <div class="help-step-num">4</div>
+        <div class="help-step-body">
+          <div class="help-step-title">🤖 Usar desde un LLM (MCP)</div>
+          <div class="help-step-text">
+            Conecta MyVoices a un modelo (Claude Desktop, etc.) mediante el
+            <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a>.
+            El servidor MCP envuelve esta misma API REST como herramientas que
+            el modelo puede invocar.
+          </div>
+          <ul class="help-params">
+            <li><code>get_status</code>, <code>list_voices</code>, <code>list_presets</code>, <code>list_phrases</code> — lectura</li>
+            <li><code>speak(voice, text)</code> — sintetiza y reproduce</li>
+            <li><code>play_phrase(name)</code> — dispara una frase guardada</li>
+            <li><code>download_last_audio</code> — metadatos del último WAV cacheado</li>
+          </ul>
+          <div class="help-step-text" style="margin-top:8px">
+            Instala las dependencias y configura Claude Desktop:
+          </div>
+          <pre class="code-block">pip install -r requirements-mcp.txt</pre>
+          <pre class="code-block">// %APPDATA%\Claude\claude_desktop_config.json
+{
+  "mcpServers": {
+    "myvoices": {
+      "command": "C:/ruta/MyVoices/venv/Scripts/python.exe",
+      "args":    ["C:/ruta/MyVoices/mcp_server.py"],
+      "env":     { "MYVOICES_URL": "http://localhost:8000" }
+    }
+  }
+}</pre>
+          <div class="help-step-text">
+            La app de MyVoices debe estar abierta cuando el modelo invoque las
+            herramientas — el MCP solo redirige peticiones HTTP al servidor local.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
