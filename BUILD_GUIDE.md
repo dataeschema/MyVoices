@@ -78,25 +78,32 @@ The script does everything on its own:
 
 1. Verifies Python 3.10+ is on the PATH
 2. Creates the `venv` virtual environment if it doesn't exist
-3. **Asks which GPU you have** (interactive menu):
+3. **Asks which GPU you have on the first run** and saves the choice in `.build_config`. Subsequent builds don't ask again:
    ```
    Select your GPU:
      [1] RTX 50xx (Blackwell)        - CUDA 12.8
      [2] RTX 20xx / 30xx / 40xx      - CUDA 12.4  (recommended for most)
      [3] No GPU / CPU only
    ```
-4. Installs PyTorch with the right CUDA version
-5. Installs `requirements.txt`
-6. Re-pins `numpy<2.0` and `networkx<3.0` (incompatible with gruut if upgraded)
-7. Installs PyInstaller ≥ 6.0
-8. Kills `MyVoices.exe` if it's running
-9. Cleans previous builds (`dist\MyVoices\`, `build\`)
-10. Compiles using `MyVoices.spec`
-11. Prints the final exe path on success
+4. Detects whether PyTorch is already installed with the right CUDA version and **skips reinstall when it matches** (the full reinstall pulls ~5 GB; skipping cuts incremental builds dramatically)
+5. Installs `requirements.txt` (already pins `numpy<2.0` and `networkx<3.0`)
+6. Installs `requirements-dev.txt` (includes `pyinstaller>=6.0`, `pytest`, `ruff`)
+7. Kills `MyVoices.exe` only if it's actually running
+8. Cleans previous builds (`dist\MyVoices\`, `build\`)
+9. Compiles using `MyVoices.spec` with `--clean` (avoids stale cache issues)
+10. Reports total duration and bundle size on success
 
 ```bat
 build.bat
 ```
+
+#### Optional flags
+
+| Flag | What it does |
+|---|---|
+| `--reset-gpu` | Forget the cached GPU in `.build_config` and ask again |
+| `--skip-deps` | Skip PyTorch + `requirements.txt` + `requirements-dev.txt`. Useful when only `static/index.html` or the `.spec` changed |
+| `--ci` | Non-interactive mode: no `pause`, no prompts; fails if `.build_config` is missing |
 
 The final executable lives at: `dist\MyVoices\MyVoices.exe`
 
@@ -242,7 +249,7 @@ venv\Scripts\activate
 pip install "numpy<2.0.0" "networkx<3.0.0"
 ```
 
-`build.bat` runs this step automatically at the end, after installing `requirements.txt`.
+The version constraints (`numpy<2.0.0`, `networkx<3.0.0`) are pinned directly in `requirements.txt`, so `pip install -r requirements.txt` keeps the compatible versions automatically.
 
 ### The window doesn't open (server timeout)
 

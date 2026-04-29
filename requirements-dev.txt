@@ -1,7 +1,10 @@
-# Dependencias para desarrollo y CI — NO necesarias para ejecutar la app
+# Dependencias para desarrollo, CI y build de ejecutable.
 # Instala con: pip install -r requirements-dev.txt
 pytest>=7.4
 pytest-asyncio>=0.23
 pytest-cov>=4.1
 coverage>=7.0
 ruff>=0.6
+
+# ── Build (build.bat) ─────────────────────────────────────────────────────────
+pyinstaller>=6.0
