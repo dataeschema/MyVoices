@@ -107,7 +107,7 @@ The script:
 
 The final executable lives in `dist\MyVoices\MyVoices.exe`.
 
-> See [GUIA_EJECUTABLE.md](GUIA_EJECUTABLE.md) for details and troubleshooting.
+> See [BUILD_GUIDE.md](BUILD_GUIDE.md) for details and troubleshooting.
 
 ---
 
