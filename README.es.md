@@ -17,9 +17,9 @@ Aplicación de escritorio TTS para streaming. Lee texto con voces clonadas usand
 - **Panel de prueba**: selecciona un preset, escucha y descarga el resultado
 - **Splash screen**: barra de progreso animada durante el arranque mientras carga el modelo
 - **Visor de logs**: registro de actividad con auto-refresco, filtro por nivel y rotación automática
-- **Tests**: 121 tests unitarios e integración (DB, utils, API CRUD, marcado UI) ejecutables sin GPU
+- **Tests**: 168 tests unitarios e integración (DB, utils, API CRUD, marcado UI, MCP) ejecutables sin GPU
 - **CI**: GitHub Actions ejecuta ruff + pytest en cada push y PR
-- **Servidor MCP**: servidor Model Context Protocol opcional para que un LLM (Claude Desktop, etc.) pueda listar voces, hablar texto y reproducir frases guardadas a través de la misma API REST
+- **Servidor MCP integrado**: endpoint [Model Context Protocol](https://modelcontextprotocol.io) montado en `/mcp/`, **activable desde la propia UI** y protegido por Bearer token. Permite que un LLM (Claude Desktop, Claude Code, Cursor, Gemini CLI, ChatGPT…) liste voces, hable texto y dispare frases guardadas. Se mantiene también `mcp_server.py` (stdio) para clientes que lo necesiten
 
 ---
 
@@ -86,7 +86,7 @@ pip install -r requirements-dev.txt   # solo la primera vez
 pytest --cov
 ```
 
-121 tests en cuatro suites. No requieren GPU ni modelos descargados (el servidor arranca en modo test sin cargar TTS).
+168 tests en cinco suites (DB, utils, API CRUD, marcado UI, MCP). No requieren GPU ni modelos descargados (el servidor arranca en modo test sin cargar TTS).
 
 ---
 
@@ -154,23 +154,27 @@ POST http://localhost:8000/api/phrases/{nombre}/play
 
 ---
 
-## Servidor MCP (opcional)
+## Servidor MCP (integración con LLMs)
 
-Expone MyVoices a un modelo IA mediante el [Model Context Protocol](https://modelcontextprotocol.io). El servidor MCP es un envoltorio fino sobre la API REST — lista voces/presets/frases y dispara la síntesis, todo desde una herramienta del LLM.
+MyVoices expone un endpoint [Model Context Protocol](https://modelcontextprotocol.io) para que un LLM (Claude, Cursor, Gemini, ChatGPT…) pueda listar voces, leer texto y disparar frases guardadas vía tool calls.
 
-```bash
-# 1. Instala las dependencias del MCP en el mismo venv
-pip install -r requirements-mcp.txt
+Hay dos transportes — usa el que mejor le venga a tu cliente:
 
-# 2. Asegúrate de que MyVoices esté corriendo (la app de escritorio o `python main.py`)
+### HTTP — integrado en la app (recomendado)
 
-# 3. Lanza el servidor MCP (a mano para probar, o conéctalo a Claude Desktop más abajo)
-python mcp_server.py
-```
+1. Abre MyVoices, ve a la pestaña **Principal → tarjeta 🤖 Servidor MCP** y activa el toggle.
+2. La tarjeta muestra la URL (`http://localhost:8000/mcp/`) y un Bearer token (autogenerado en la primera activación).
+3. Abre la pestaña **Ayuda**, elige tu cliente en el selector y copia el snippet de configuración auto-rellenado — URL, token y rutas absolutas vienen ya sustituidos.
 
-Herramientas expuestas:
+El endpoint queda gateado por el toggle (devuelve `503` si está OFF) y por `Authorization: Bearer <token>` (devuelve `401` si no coincide).
 
-| Herramienta | Qué hace |
+### stdio — legacy, para clientes sin soporte HTTP
+
+Lanza `python mcp_server.py` como subprocess desde la config de tu cliente. El script solo redirige llamadas a la API REST local, así que la app de MyVoices debe estar abierta.
+
+### Tools expuestas
+
+| Tool | Qué hace |
 |---|---|
 | `get_status` | Estado del servidor: motor TTS, dispositivo, conteos de voces/presets |
 | `list_voices` | Voces registradas (clonadas XTTS + Piper) |
@@ -180,25 +184,30 @@ Herramientas expuestas:
 | `play_phrase(name)` | Reproduce una frase guardada por nombre |
 | `download_last_audio` | Metadatos del último WAV cacheado |
 
-### Configuración para Claude Desktop
+### Clientes soportados
 
-Añade esta entrada en `claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+| Cliente | Transport | Dónde va el snippet |
+|---|---|---|
+| Claude Desktop | HTTP o stdio | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Claude Code (CLI) | HTTP | `claude mcp add myvoices --transport http …` |
+| Cursor | HTTP | `.cursor/mcp.json` (proyecto) o `~/.cursor/mcp.json` (global) |
+| Gemini CLI | HTTP | `~/.gemini/mcp.json` |
+| ChatGPT (Connectors) | HTTP | Settings → Connectors → Add MCP Server (depende del plan) |
+| Cline | stdio | UI de settings de Cline |
+| Genérico HTTP | HTTP | URL + header `Authorization: Bearer <token>` |
 
-```json
-{
-  "mcpServers": {
-    "myvoices": {
-      "command": "C:/ruta/a/MyVoices/venv/Scripts/python.exe",
-      "args":    ["C:/ruta/a/MyVoices/mcp_server.py"],
-      "env":     { "MYVOICES_URL": "http://localhost:8000" }
-    }
-  }
-}
+La pestaña Ayuda dentro de MyVoices muestra el snippet listo para copiar para cada cliente, con URL, token y rutas ya sustituidos.
+
+### Smoke test desde terminal
+
+```bash
+# Activa MCP desde la UI primero, luego copia el token de la tarjeta.
+TOKEN="<pega aquí>"
+curl -X POST http://localhost:8000/mcp/ \
+     -H "Accept: application/json, text/event-stream" \
+     -H "Authorization: Bearer $TOKEN" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}'
 ```
-
-Reinicia Claude Desktop y pídele que "liste las voces disponibles" o que "diga hola con el preset Locutor".
-
-> El servidor MCP solo redirige llamadas HTTP — la app de MyVoices debe estar corriendo en `MYVOICES_URL` (por defecto `http://localhost:8000`) antes de que el modelo invoque una herramienta.
 
 ---
 

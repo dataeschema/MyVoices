@@ -70,7 +70,7 @@ import urllib.request
 import wave as wave_module
 
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -207,10 +207,105 @@ _uv_access = logging.getLogger("uvicorn.access")
 if not _uv_access.propagate:
     _uv_access.addHandler(_db_handler)
 
-app = FastAPI(title="MyVoices Service")
-
-# ── Inicialización ────────────────────────────────────────────────────────────
+# ── Inicialización (antes de crear el app para que el lifespan vea la config)
 init_db()
+
+# ── MCP embebido (HTTP) ───────────────────────────────────────────────────────
+# Se monta en /mcp/ pero queda gateado por flag (config.mcp_enabled) y
+# por Bearer token. Se puede activar/desactivar desde la UI sin reiniciar.
+import secrets
+from contextlib import asynccontextmanager
+
+from mcp_tools import build_mcp_server
+
+# Hosts permitidos por la transport security de FastMCP. En producción son
+# loopback; en tests usamos 'testserver'.
+_MCP_ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
+
+# `_mcp` y `_mcp_inner_asgi` se (re)crean en cada lifespan startup.
+# StreamableHTTPSessionManager solo permite una llamada a `.run()` por
+# instancia, así que cada arranque del servidor estrena una FastMCP nueva.
+_mcp = None
+_mcp_inner_asgi = None
+
+
+def _build_mcp():
+    mcp = build_mcp_server(
+        name="MyVoices",
+        streamable_http_path="/",
+        host="127.0.0.1",
+    )
+    try:
+        mcp.settings.transport_security.allowed_hosts = _MCP_ALLOWED_HOSTS
+    except Exception:
+        pass
+    return mcp, mcp.streamable_http_app()
+
+
+def _mcp_state() -> dict:
+    """Lee el estado MCP desde la DB. Se llama en cada request al mount —
+    barato (una fila en SQLite local) y permite que el toggle se aplique
+    al instante sin reiniciar el servidor."""
+    cfg = load_config()
+    enabled = str(cfg.get("mcp_enabled", "false")).lower() == "true"
+    token = cfg.get("mcp_token", "") or ""
+    return {"enabled": enabled, "token": token}
+
+
+def _ensure_mcp_token() -> str:
+    """Genera y persiste un Bearer token si no existe."""
+    cfg = load_config()
+    token = cfg.get("mcp_token", "") or ""
+    if not token:
+        token = secrets.token_urlsafe(32)
+        save_config({"mcp_token": token})
+    return token
+
+
+async def _mcp_mount_dispatch(scope, receive, send):
+    """ASGI app montado en /mcp/. Aplica el gate (toggle + auth) y delega
+    en la instancia FastMCP actual creada por el lifespan."""
+    async def _send_json(status: int, payload: dict):
+        body = json.dumps(payload).encode()
+        await send({"type": "http.response.start", "status": status,
+                    "headers": [(b"content-type", b"application/json"),
+                                (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body})
+
+    if scope["type"] != "http":
+        if _mcp_inner_asgi:
+            await _mcp_inner_asgi(scope, receive, send)
+        return
+
+    st = _mcp_state()
+    if not st["enabled"]:
+        await _send_json(503,
+                         {"error": "MCP disabled. Activate it in the MyVoices UI."})
+        return
+    if st["token"]:
+        headers = dict(scope.get("headers", []))
+        auth = headers.get(b"authorization", b"").decode()
+        if auth != f"Bearer {st['token']}":
+            await _send_json(401, {"error": "Missing or invalid Bearer token."})
+            return
+    if _mcp_inner_asgi is None:
+        await _send_json(503, {"error": "MCP not initialised yet."})
+        return
+    await _mcp_inner_asgi(scope, receive, send)
+
+
+@asynccontextmanager
+async def _lifespan(_app):
+    """En cada arranque (re)creamos el FastMCP server y su session_manager
+    (que solo admite una llamada a `.run()` por instancia)."""
+    global _mcp, _mcp_inner_asgi
+    _mcp, _mcp_inner_asgi = _build_mcp()
+    async with _mcp.session_manager.run():
+        yield
+
+
+app = FastAPI(title="MyVoices Service", lifespan=_lifespan)
+app.mount("/mcp", _mcp_mount_dispatch)
 
 VOICES_DIR = get_voices_dir()
 PIPER_DIR  = get_piper_dir()
@@ -1062,3 +1157,237 @@ async def api_get_logs(limit: int = 200, offset: int = 0, level: str = None):
 async def api_clear_logs():
     clear_logs()
     return {"status": "cleared"}
+
+
+# ── MCP control ───────────────────────────────────────────────────────────────
+
+_MCP_CLIENT_TEMPLATES = {
+    # Cliente / etiqueta visible / transport / cómo se configura
+    "claude_desktop_http": {
+        "label":      "Claude Desktop (HTTP)",
+        "transport":  "http",
+        "config_path": "%APPDATA%\\Claude\\claude_desktop_config.json",
+        "instructions": (
+            "Pega este bloque dentro de la sección \"mcpServers\" del JSON. "
+            "Si no existe el campo, créalo. Reinicia Claude Desktop tras guardar."
+        ),
+    },
+    "claude_desktop_stdio": {
+        "label":      "Claude Desktop (stdio, legacy)",
+        "transport":  "stdio",
+        "config_path": "%APPDATA%\\Claude\\claude_desktop_config.json",
+        "instructions": (
+            "Modo stdio: lanza mcp_server.py como subprocess. La app de "
+            "MyVoices debe estar abierta para que el script pueda llamar a "
+            "su REST API."
+        ),
+    },
+    "claude_code": {
+        "label":      "Claude Code (CLI)",
+        "transport":  "http",
+        "config_path": "Comando en terminal — no edita ficheros",
+        "instructions": (
+            "Ejecuta el comando en una terminal. `claude mcp list` debe "
+            "mostrar 'myvoices' tras añadirlo."
+        ),
+    },
+    "cursor": {
+        "label":      "Cursor",
+        "transport":  "http",
+        "config_path": ".cursor/mcp.json (proyecto) o ~/.cursor/mcp.json (global)",
+        "instructions": (
+            "Crea o edita el fichero. Reinicia Cursor tras guardar."
+        ),
+    },
+    "gemini_cli": {
+        "label":      "Gemini CLI",
+        "transport":  "http",
+        "config_path": "~/.gemini/mcp.json",
+        "instructions": (
+            "Crea el fichero si no existe. Compatible con Gemini CLI ≥ 0.4."
+        ),
+    },
+    "chatgpt": {
+        "label":      "ChatGPT (Connectors)",
+        "transport":  "http",
+        "config_path": "Settings → Connectors → Add MCP Server",
+        "instructions": (
+            "Disponibilidad varía por plan (Team/Enterprise). En la UI de "
+            "Connectors pega la URL y añade un header Authorization."
+        ),
+    },
+    "generic_http": {
+        "label":      "Genérico (HTTP)",
+        "transport":  "http",
+        "config_path": "—",
+        "instructions": (
+            "URL + header Authorization Bearer. Útil para cualquier cliente "
+            "MCP que soporte streamable HTTP."
+        ),
+    },
+}
+
+
+def _mcp_url(request) -> str:
+    """URL pública del endpoint MCP a partir de la request entrante."""
+    host = request.headers.get("host", "localhost:8000")
+    scheme = request.url.scheme or "http"
+    return f"{scheme}://{host}/mcp/"
+
+
+def _render_snippet(client_id: str, url: str, token: str) -> dict:
+    """Devuelve {format, content} para el cliente indicado."""
+    auth_header = f"Bearer {token}" if token else ""
+    if client_id == "claude_desktop_http":
+        body = {
+            "mcpServers": {
+                "myvoices": {
+                    "type":    "http",
+                    "url":     url,
+                    "headers": {"Authorization": auth_header} if token else {},
+                }
+            }
+        }
+        return {"format": "json", "content": json.dumps(body, indent=2)}
+    if client_id == "claude_desktop_stdio":
+        body = {
+            "mcpServers": {
+                "myvoices": {
+                    "command": sys.executable,
+                    "args":    [os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                              "mcp_server.py")],
+                    "env":     {"MYVOICES_URL": url.rsplit("/mcp/", 1)[0]},
+                }
+            }
+        }
+        return {"format": "json", "content": json.dumps(body, indent=2)}
+    if client_id == "claude_code":
+        cmd = f'claude mcp add myvoices --transport http {url}'
+        if token:
+            cmd += f' --header "Authorization: {auth_header}"'
+        return {"format": "bash", "content": cmd}
+    if client_id == "cursor":
+        body = {
+            "mcpServers": {
+                "myvoices": {
+                    "url":     url,
+                    "headers": {"Authorization": auth_header} if token else {},
+                }
+            }
+        }
+        return {"format": "json", "content": json.dumps(body, indent=2)}
+    if client_id == "gemini_cli":
+        body = {
+            "mcpServers": {
+                "myvoices": {
+                    "httpUrl":     url,
+                    "httpHeaders": {"Authorization": auth_header} if token else {},
+                }
+            }
+        }
+        return {"format": "json", "content": json.dumps(body, indent=2)}
+    if client_id == "chatgpt":
+        return {
+            "format":  "text",
+            "content": (
+                f"Server URL:\n  {url}\n\n"
+                f"Authentication header:\n  Authorization: {auth_header}\n\n"
+                "(Solo Connectors / planes que soporten servidores MCP HTTP.)"
+            ),
+        }
+    if client_id == "generic_http":
+        curl = f'curl -X POST {url} \\\n     -H "Accept: application/json, text/event-stream"'
+        if token:
+            curl += f' \\\n     -H "Authorization: {auth_header}"'
+        return {"format": "bash", "content": curl}
+    raise HTTPException(404, f"client '{client_id}' not supported")
+
+
+@app.get("/api/mcp/status")
+async def api_mcp_status(request: Request):
+    st = _mcp_state()
+    return {
+        "enabled":     st["enabled"],
+        "has_token":   bool(st["token"]),
+        "url":         _mcp_url(request),
+        "transport":   "streamable-http",
+    }
+
+
+class _McpToggleReq(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/mcp/toggle")
+async def api_mcp_toggle(req: _McpToggleReq):
+    if req.enabled:
+        token = _ensure_mcp_token()
+        save_config({"mcp_enabled": True})
+        return {"enabled": True, "token": token}
+    save_config({"mcp_enabled": False})
+    return {"enabled": False}
+
+
+@app.get("/api/mcp/token")
+async def api_mcp_token():
+    """Devuelve el Bearer token actual (o cadena vacía si nunca se generó)."""
+    return {"token": load_config().get("mcp_token", "") or ""}
+
+
+@app.post("/api/mcp/regenerate-token")
+async def api_mcp_regenerate_token():
+    token = secrets.token_urlsafe(32)
+    save_config({"mcp_token": token})
+    return {"token": token}
+
+
+@app.get("/api/mcp/clients")
+async def api_mcp_clients():
+    """Lista los clientes con plantilla disponible (para la UI de ayuda)."""
+    return [
+        {"id": cid, "label": meta["label"], "transport": meta["transport"]}
+        for cid, meta in _MCP_CLIENT_TEMPLATES.items()
+    ]
+
+
+@app.get("/api/mcp/config-snippet")
+async def api_mcp_config_snippet(client: str, request: Request):
+    if client not in _MCP_CLIENT_TEMPLATES:
+        raise HTTPException(404, f"client '{client}' not supported")
+    meta  = _MCP_CLIENT_TEMPLATES[client]
+    state = _mcp_state()
+    snippet = _render_snippet(client, _mcp_url(request), state["token"])
+    return {
+        "client":       client,
+        "label":        meta["label"],
+        "transport":    meta["transport"],
+        "config_path":  meta["config_path"],
+        "instructions": meta["instructions"],
+        "format":       snippet["format"],
+        "content":      snippet["content"],
+    }
+
+
+@app.post("/api/mcp/test")
+async def api_mcp_test(request: Request):
+    """Auto-test: lanza una request HTTP MCP sobre el propio mount con auth.
+    Útil para verificar que la cadena de gate + session manager funciona."""
+    state = _mcp_state()
+    if not state["enabled"]:
+        return {"ok": False, "detail": "MCP está desactivado"}
+    import httpx
+    headers = {"Accept": "application/json, text/event-stream"}
+    if state["token"]:
+        headers["Authorization"] = f"Bearer {state['token']}"
+    payload = {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                   "clientInfo": {"name": "myvoices-self-test", "version": "1"}},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.post(_mcp_url(request), json=payload, headers=headers)
+        ok = r.status_code == 200 and "protocolVersion" in r.text
+        return {"ok": ok, "status": r.status_code, "body_excerpt": r.text[:200]}
+    except Exception as exc:
+        return {"ok": False, "detail": str(exc)}

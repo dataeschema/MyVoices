@@ -325,6 +325,8 @@ details[open] summary::before { transform: rotate(90deg); }
   <div id="st-piper" class="status-pill"><span class="dot dot-warn"></span>Piper: —</div>
   <div id="st-voices" class="status-pill" style="color:var(--text)">Voces: —</div>
   <div id="st-presets" class="status-pill" style="color:var(--text)">Presets: —</div>
+  <div id="st-mcp" class="status-pill" style="cursor:pointer" title="Click para activar/desactivar el servidor MCP"
+       onclick="toggleMcp()"><span class="dot dot-err"></span>MCP: OFF</div>
 </div>
 
 <!-- ── Tab Panels ─────────────────────────────────────────────────────────── -->
@@ -457,6 +459,49 @@ details[open] summary::before { transform: rotate(90deg); }
         <code style="color:var(--accent)">POST http://localhost:8000/api/speak</code>
       </div>
       <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="copyApiExample()">📋 Copiar</button>
+    </div>
+
+    <!-- ── MCP control ────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-title">🤖 Servidor MCP</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Permite que un LLM (Claude Desktop, Claude Code, Cursor, Gemini…) use
+        MyVoices vía <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a>.
+      </p>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="mcpToggle" onchange="toggleMcp()">
+          <span class="toggle-slider"></span>
+        </label>
+        <label for="mcpToggle">Activar servidor MCP HTTP</label>
+      </div>
+      <div id="mcpDetails" style="display:none;margin-top:8px">
+        <div class="form-row">
+          <label>URL <span style="color:var(--muted);font-weight:400">(streamable HTTP)</span></label>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="mcpUrl" readonly>
+            <button class="btn btn-secondary btn-sm" onclick="copyMcpUrl()">📋</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Bearer token</label>
+          <div style="display:flex;gap:6px">
+            <input type="password" id="mcpToken" readonly>
+            <button class="btn btn-secondary btn-sm" id="mcpTokenShow" onclick="toggleMcpTokenVisibility()">👁</button>
+            <button class="btn btn-secondary btn-sm" onclick="copyMcpToken()">📋</button>
+            <button class="btn btn-edit btn-sm" onclick="regenerateMcpToken()" title="Generar un token nuevo">🔄</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">
+            Cualquier cliente que llame a <code>/mcp/</code> debe enviar este token en el header
+            <code>Authorization: Bearer …</code>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-secondary btn-sm" onclick="testMcp()">⚡ Probar conexión</button>
+          <a class="btn btn-secondary btn-sm" href="#" onclick="goToHelpMcp(); return false;">📖 Ver configuraciones por cliente</a>
+        </div>
+        <div id="mcpTestResult" style="font-size:12px;margin-top:8px"></div>
+      </div>
     </div>
 
     <!-- Frases guardadas — clickable rows, created from test panel -->
@@ -704,16 +749,16 @@ Content-Type: application/json
 
       <div class="help-arrow">↓</div>
 
-      <!-- Paso 4: MCP -->
-      <div class="help-step">
+      <!-- Paso 4: MCP — multi-cliente -->
+      <div class="help-step" id="helpMcpAnchor">
         <div class="help-step-num">4</div>
         <div class="help-step-body">
           <div class="help-step-title">🤖 Usar desde un LLM (MCP)</div>
           <div class="help-step-text">
-            Conecta MyVoices a un modelo (Claude Desktop, etc.) mediante el
+            Conecta MyVoices a un modelo (Claude, Cursor, Gemini, ChatGPT…) mediante el
             <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol</a>.
             El servidor MCP envuelve esta misma API REST como herramientas que
-            el modelo puede invocar.
+            el modelo puede invocar:
           </div>
           <ul class="help-params">
             <li><code>get_status</code>, <code>list_voices</code>, <code>list_presets</code>, <code>list_phrases</code> — lectura</li>
@@ -722,22 +767,16 @@ Content-Type: application/json
             <li><code>download_last_audio</code> — metadatos del último WAV cacheado</li>
           </ul>
           <div class="help-step-text" style="margin-top:8px">
-            Instala las dependencias y configura Claude Desktop:
+            <b>Antes de conectar un cliente</b>: activa el servidor MCP desde la
+            pestaña <i>Principal</i> (tarjeta 🤖 Servidor MCP) — el toggle
+            genera el Bearer token y enciende el endpoint <code>/mcp/</code>.
+            Cuando esté ON, elige tu cliente abajo y copia la configuración:
           </div>
-          <pre class="code-block">pip install -r requirements-mcp.txt</pre>
-          <pre class="code-block">// %APPDATA%\Claude\claude_desktop_config.json
-{
-  "mcpServers": {
-    "myvoices": {
-      "command": "C:/ruta/MyVoices/venv/Scripts/python.exe",
-      "args":    ["C:/ruta/MyVoices/mcp_server.py"],
-      "env":     { "MYVOICES_URL": "http://localhost:8000" }
-    }
-  }
-}</pre>
-          <div class="help-step-text">
-            La app de MyVoices debe estar abierta cuando el modelo invoque las
-            herramientas — el MCP solo redirige peticiones HTTP al servidor local.
+
+          <!-- Selector de clientes -->
+          <div id="mcpClientTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px"></div>
+          <div id="mcpClientPanel" class="card" style="background:var(--surface2);min-height:200px">
+            <p style="color:var(--muted);font-size:12px">Selecciona un cliente arriba para ver su configuración auto-rellenada con tu URL y token.</p>
           </div>
         </div>
       </div>
@@ -784,6 +823,7 @@ function setupTabs() {
         loadPiperVoices();
         if (!catalogData.length) fetchPiperCatalog();
       }
+      if (id === 'help') loadMcpClients();
     });
   });
 
@@ -841,6 +881,156 @@ async function loadStatus() {
   } catch (e) {
     document.getElementById('st-xtts').innerHTML = '<span class="dot dot-err"></span>Sin conexión';
   }
+  loadMcpStatus();
+}
+
+// ── MCP control ────────────────────────────────────────────────────────────
+async function loadMcpStatus() {
+  try {
+    const s = await fetch('/api/mcp/status').then(r => r.json());
+    const pill   = document.getElementById('st-mcp');
+    const toggle = document.getElementById('mcpToggle');
+    const det    = document.getElementById('mcpDetails');
+    if (s.enabled) {
+      pill.innerHTML = '<span class="dot dot-ok"></span>MCP: ON';
+      toggle.checked = true;
+      det.style.display = 'block';
+      document.getElementById('mcpUrl').value = s.url;
+      const tok = await fetch('/api/mcp/token').then(r => r.json());
+      document.getElementById('mcpToken').value = tok.token || '';
+    } else {
+      pill.innerHTML = '<span class="dot dot-err"></span>MCP: OFF';
+      toggle.checked = false;
+      det.style.display = 'none';
+    }
+  } catch (e) {
+    document.getElementById('st-mcp').innerHTML = '<span class="dot dot-warn"></span>MCP: ?';
+  }
+}
+
+async function toggleMcp() {
+  const cur  = document.getElementById('mcpToggle').checked;
+  const r = await fetch('/api/mcp/toggle', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ enabled: cur }),
+  });
+  if (!r.ok) {
+    showToast('No se pudo actualizar el estado MCP', 'error');
+  } else {
+    showToast(cur ? 'Servidor MCP activado' : 'Servidor MCP desactivado', 'success');
+  }
+  await loadMcpStatus();
+}
+
+function copyMcpUrl() {
+  const v = document.getElementById('mcpUrl').value;
+  navigator.clipboard.writeText(v);
+  showToast('URL copiada', 'success');
+}
+
+function copyMcpToken() {
+  const v = document.getElementById('mcpToken').value;
+  if (!v) { showToast('No hay token', 'error'); return; }
+  navigator.clipboard.writeText(v);
+  showToast('Token copiado', 'success');
+}
+
+function toggleMcpTokenVisibility() {
+  const inp = document.getElementById('mcpToken');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function regenerateMcpToken() {
+  if (!confirm('Generar un token nuevo invalida la configuración existente en los clientes. ¿Continuar?')) return;
+  const r = await fetch('/api/mcp/regenerate-token', { method: 'POST' });
+  if (r.ok) {
+    showToast('Token regenerado', 'success');
+    await loadMcpStatus();
+  } else {
+    showToast('Error al regenerar token', 'error');
+  }
+}
+
+async function testMcp() {
+  const out = document.getElementById('mcpTestResult');
+  out.textContent = '⏳ Probando…';
+  out.style.color = 'var(--muted)';
+  try {
+    const r = await fetch('/api/mcp/test', { method: 'POST' }).then(r => r.json());
+    if (r.ok) {
+      out.textContent = '✅ Conexión OK (handshake protocolVersion recibido)';
+      out.style.color = 'var(--success)';
+    } else {
+      out.textContent = `❌ ${r.detail || 'Falló la prueba'}`;
+      out.style.color = 'var(--danger)';
+    }
+  } catch (e) {
+    out.textContent = `❌ ${e.message}`;
+    out.style.color = 'var(--danger)';
+  }
+}
+
+function goToHelpMcp() {
+  document.querySelector('.tab-btn[data-tab="help"]').click();
+  setTimeout(() => {
+    const target = document.getElementById('helpMcpAnchor');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
+}
+
+// ── MCP help-tab multi-client snippets ────────────────────────────────────
+let _mcpClientsLoaded = false;
+async function loadMcpClients() {
+  if (_mcpClientsLoaded) return;
+  _mcpClientsLoaded = true;
+  try {
+    const list = await fetch('/api/mcp/clients').then(r => r.json());
+    const tabsEl = document.getElementById('mcpClientTabs');
+    if (!tabsEl) return;
+    tabsEl.innerHTML = list.map((c, i) => `
+      <button class="btn btn-sm ${i === 0 ? 'btn-primary' : 'btn-secondary'}"
+              data-mcp-client="${c.id}" onclick="showMcpClient('${c.id}', this)">${c.label}</button>
+    `).join('');
+    if (list.length) showMcpClient(list[0].id, tabsEl.querySelector('button'));
+  } catch (e) {
+    /* silent — MCP backend not reachable */
+  }
+}
+
+async function showMcpClient(clientId, btnEl) {
+  document.querySelectorAll('#mcpClientTabs button').forEach(b => {
+    b.classList.remove('btn-primary'); b.classList.add('btn-secondary');
+  });
+  if (btnEl) { btnEl.classList.remove('btn-secondary'); btnEl.classList.add('btn-primary'); }
+
+  const panel = document.getElementById('mcpClientPanel');
+  panel.innerHTML = '<p style="color:var(--muted);font-size:12px">⏳ Cargando configuración…</p>';
+  try {
+    const s = await fetch(`/api/mcp/config-snippet?client=${encodeURIComponent(clientId)}`)
+                .then(r => r.json());
+    const transportLabel = s.transport === 'stdio' ? '🔌 stdio' : '🌐 HTTP';
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:14px">${esc(s.label)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${transportLabel}</div>
+        </div>
+        <button class="btn btn-edit btn-sm" onclick='copyMcpSnippet(${JSON.stringify(s.content)})'>📋 Copiar</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">
+        <b>Ubicación:</b> <code>${esc(s.config_path)}</code>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(s.instructions)}</div>
+      <pre class="code-block" style="max-height:300px;overflow:auto"><code>${esc(s.content)}</code></pre>`;
+  } catch (e) {
+    panel.innerHTML = `<p style="color:var(--danger)">❌ Error: ${e.message}</p>`;
+  }
+}
+
+function copyMcpSnippet(content) {
+  navigator.clipboard.writeText(content);
+  showToast('Configuración copiada', 'success');
 }
 
 // ── Voices ─────────────────────────────────────────────────────────────────

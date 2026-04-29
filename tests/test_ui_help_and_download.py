@@ -146,7 +146,7 @@ def test_help_tab_shows_api_examples():
     html = _read()
     panel_match = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html)
     body = panel_match.group(0)
-    # Debe haber al menos 2 code-blocks (uno por endpoint)
+    # Pasos 3.4 y 3.5 muestran ejemplos curl con los endpoints REST
     code_blocks = re.findall(r'<pre[^>]*class="code-block"', body)
     assert len(code_blocks) >= 2, \
         f"help tab should show at least 2 API code examples, found {len(code_blocks)}"
@@ -181,19 +181,70 @@ def test_help_mcp_lists_main_tools():
             f"MCP tool {tool!r} missing in help tab"
 
 
-def test_help_mcp_shows_install_command():
+def test_help_mcp_section_has_anchor_and_dynamic_panel():
     html = _read()
     panel = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html).group(0)
-    assert "requirements-mcp.txt" in panel, \
-        "help tab must show MCP install command"
+    assert 'id="helpMcpAnchor"' in panel, \
+        "help tab must expose helpMcpAnchor for cross-tab scrolling"
+    assert 'id="mcpClientTabs"' in panel, \
+        "help tab must contain client selector tabs container"
+    assert 'id="mcpClientPanel"' in panel, \
+        "help tab must contain dynamic snippet panel"
 
 
-def test_help_mcp_shows_claude_desktop_config():
+def test_help_mcp_loads_clients_via_js():
     html = _read()
-    panel = re.search(r'id="tab-help"[\s\S]*?</div><!-- /content', html).group(0)
-    assert "claude_desktop_config.json" in panel, \
-        "help tab must show Claude Desktop config path"
-    assert "mcpServers" in panel, \
-        "help tab must show mcpServers JSON key"
-    assert "MYVOICES_URL" in panel, \
-        "help tab must mention MYVOICES_URL env var"
+    assert "loadMcpClients" in html, \
+        "loadMcpClients() must exist to populate client tabs"
+    # Must be called when help tab is activated
+    assert re.search(r"id === 'help'\)\s*loadMcpClients\(\)", html), \
+        "loadMcpClients() must be called when the help tab is opened"
+
+
+def test_help_mcp_show_client_function_exists():
+    html = _read()
+    assert "function showMcpClient" in html, \
+        "showMcpClient() must render the snippet for a chosen client"
+    # debe golpear el endpoint server-side de snippets
+    assert "/api/mcp/config-snippet?client=" in html, \
+        "showMcpClient() must fetch /api/mcp/config-snippet"
+
+
+def test_help_mcp_copy_button_uses_clipboard():
+    html = _read()
+    assert "copyMcpSnippet" in html, "copyMcpSnippet() must exist"
+    assert "navigator.clipboard.writeText" in html
+
+
+# ── 4. MCP control card (Main tab) + status pill ──────────────────────────
+
+def test_status_bar_has_mcp_pill():
+    html = _read()
+    assert 'id="st-mcp"' in html, "status bar must contain #st-mcp pill"
+    assert re.search(r'id="st-mcp"[^>]*onclick="toggleMcp\(\)"', html), \
+        "status pill must be clickable to toggle MCP"
+
+
+def test_main_tab_has_mcp_control_card():
+    html = _read()
+    # Tarjeta dentro del tab Principal con título "Servidor MCP"
+    assert re.search(r'card-title">[^<]*Servidor MCP', html), \
+        "main tab must contain a Servidor MCP card"
+    assert 'id="mcpToggle"' in html, "MCP toggle checkbox must exist"
+    assert 'id="mcpUrl"' in html, "MCP URL input must exist"
+    assert 'id="mcpToken"' in html, "MCP token input must exist"
+
+
+def test_main_tab_mcp_control_buttons():
+    html = _read()
+    for handler in ("toggleMcp", "copyMcpUrl", "copyMcpToken",
+                    "regenerateMcpToken", "testMcp"):
+        assert f"function {handler}" in html, \
+            f"JS function {handler}() must exist"
+
+
+def test_load_status_triggers_mcp_status():
+    html = _read()
+    body = _section(html, "loadStatus")
+    assert "loadMcpStatus" in body, \
+        "loadStatus() must invoke loadMcpStatus() so the pill stays in sync"
