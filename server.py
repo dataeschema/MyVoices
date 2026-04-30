@@ -218,9 +218,15 @@ from contextlib import asynccontextmanager
 
 from mcp_tools import build_mcp_server
 
-# Hosts permitidos por la transport security de FastMCP. En producción son
-# loopback; en tests usamos 'testserver'.
-_MCP_ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
+# Hosts permitidos por la transport security de FastMCP. El validador solo
+# acepta `host:port` si el patrón termina en `:*`; con `host` a secas
+# rechaza `host:port` y devuelve 421 Misdirected Request. Por eso listamos
+# tanto la version sin puerto como la wildcarded.
+_MCP_ALLOWED_HOSTS = [
+    "127.0.0.1", "127.0.0.1:*",
+    "localhost",  "localhost:*",
+    "testserver",  # TestClient envia Host=testserver sin puerto
+]
 
 # `_mcp` y `_mcp_inner_asgi` se (re)crean en cada lifespan startup.
 # StreamableHTTPSessionManager solo permite una llamada a `.run()` por

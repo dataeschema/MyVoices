@@ -202,6 +202,25 @@ def test_mcp_mount_401_with_wrong_token(client):
     assert r.status_code == 401
 
 
+def test_mcp_mount_accepts_host_header_with_port(client):
+    """Regresion: FastMCP transport_security solo acepta `host:port` si el
+    patron en allowed_hosts termina en `:*`. Sin el wildcard, los clientes
+    reales (Claude Desktop, curl, etc.) que envian `Host: 127.0.0.1:8000`
+    reciben 421 Misdirected Request y el handshake nunca completa. Este
+    test fuerza esa cabecera para garantizar la cobertura."""
+    tok = client.post("/api/mcp/toggle", json={"enabled": True}).json()["token"]
+    for host in ("127.0.0.1:8000", "localhost:8000"):
+        r = client.post(
+            "/mcp/",
+            json=_mcp_init_payload(),
+            headers={"accept":        "application/json, text/event-stream",
+                     "Authorization": f"Bearer {tok}",
+                     "host":          host},
+        )
+        assert r.status_code == 200, f"Host {host!r} rechazado: {r.status_code} {r.text[:100]}"
+        assert "protocolVersion" in r.text
+
+
 def test_mcp_mount_handshake_with_valid_token(client):
     tok = client.post("/api/mcp/toggle", json={"enabled": True}).json()["token"]
     r = client.post(
