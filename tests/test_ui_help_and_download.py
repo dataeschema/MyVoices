@@ -237,10 +237,66 @@ def test_main_tab_has_mcp_control_card():
 
 def test_main_tab_mcp_control_buttons():
     html = _read()
-    for handler in ("toggleMcp", "copyMcpUrl", "copyMcpToken",
-                    "regenerateMcpToken", "testMcp"):
+    for handler in ("toggleMcp", "setMcpEnabled", "onMcpToggleChange",
+                    "copyMcpUrl", "copyMcpToken", "regenerateMcpToken",
+                    "testMcp"):
         assert f"function {handler}" in html, \
             f"JS function {handler}() must exist"
+
+
+# ── Regresion: bug de la pill que enviaba siempre el mismo estado ─────────
+
+def test_pill_toggle_inverts_cached_state_not_checkbox():
+    """Bug: al pulsar la pill MCP:OFF se enviaba `enabled: false` (porque
+    se leia mcpToggle.checked, que no cambia con el clic en la pill).
+    Resultado: la pill nunca activaba MCP.
+
+    Fix: toggleMcp() ahora invierte el estado cacheado en `_mcpEnabled`.
+    """
+    body = _section(_read(), "toggleMcp")
+    # Debe invertir el estado cacheado
+    assert "_mcpEnabled" in body, \
+        "toggleMcp() must use the cached _mcpEnabled flag"
+    assert "!_mcpEnabled" in body, \
+        "toggleMcp() must invert the cached state"
+    # Y NO debe leer del checkbox (esa es la causa raiz del bug)
+    assert "mcpToggle" not in body, \
+        "toggleMcp() must not read from the mcpToggle checkbox"
+
+
+def test_mcp_enabled_cache_declared():
+    html = _read()
+    assert re.search(r"let\s+_mcpEnabled\s*=\s*false", html), \
+        "_mcpEnabled cache must be declared and start false"
+
+
+def test_load_mcp_status_updates_cache():
+    body = _section(_read(), "loadMcpStatus")
+    assert "_mcpEnabled" in body, \
+        "loadMcpStatus() must update _mcpEnabled cache to keep pill in sync"
+
+
+def test_set_mcp_enabled_posts_explicit_state():
+    """setMcpEnabled(enabled) debe enviar el booleano que recibe, sin
+    leer del DOM."""
+    body = _section(_read(), "setMcpEnabled")
+    assert "/api/mcp/toggle" in body
+    assert "JSON.stringify({ enabled })" in body or "JSON.stringify({enabled})" in body, \
+        "setMcpEnabled must POST the explicit `enabled` parameter"
+    assert "mcpToggle" not in body, \
+        "setMcpEnabled must not read from the checkbox"
+
+
+def test_checkbox_uses_dedicated_change_handler():
+    html = _read()
+    assert re.search(r'id="mcpToggle"[^>]*onchange="onMcpToggleChange\(\)"', html), \
+        "checkbox must call onMcpToggleChange() (not toggleMcp) to avoid double-toggle"
+
+
+def test_pill_uses_toggle_handler():
+    html = _read()
+    assert re.search(r'id="st-mcp"[^>]*onclick="toggleMcp\(\)"', html), \
+        "status pill must wire onclick to toggleMcp()"
 
 
 def test_load_status_triggers_mcp_status():

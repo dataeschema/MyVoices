@@ -470,7 +470,7 @@ details[open] summary::before { transform: rotate(90deg); }
       </p>
       <div class="toggle-row">
         <label class="toggle">
-          <input type="checkbox" id="mcpToggle" onchange="toggleMcp()">
+          <input type="checkbox" id="mcpToggle" onchange="onMcpToggleChange()">
           <span class="toggle-slider"></span>
         </label>
         <label for="mcpToggle">Activar servidor MCP HTTP</label>
@@ -885,9 +885,16 @@ async function loadStatus() {
 }
 
 // ── MCP control ────────────────────────────────────────────────────────────
+// Estado cacheado: lo refresca loadMcpStatus() y lo lee toggleMcp()
+// (la pill de la status-bar) para invertirlo. Antes, toggleMcp leia
+// mcpToggle.checked, que NO cambia al pulsar la pill — el resultado
+// era que clic-en-pill-OFF re-enviaba {enabled:false} y nunca activaba.
+let _mcpEnabled = false;
+
 async function loadMcpStatus() {
   try {
     const s = await fetch('/api/mcp/status').then(r => r.json());
+    _mcpEnabled  = !!s.enabled;
     const pill   = document.getElementById('st-mcp');
     const toggle = document.getElementById('mcpToggle');
     const det    = document.getElementById('mcpDetails');
@@ -908,19 +915,28 @@ async function loadMcpStatus() {
   }
 }
 
-async function toggleMcp() {
-  const cur  = document.getElementById('mcpToggle').checked;
+async function setMcpEnabled(enabled) {
   const r = await fetch('/api/mcp/toggle', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ enabled: cur }),
+    body:    JSON.stringify({ enabled }),
   });
   if (!r.ok) {
     showToast('No se pudo actualizar el estado MCP', 'error');
   } else {
-    showToast(cur ? 'Servidor MCP activado' : 'Servidor MCP desactivado', 'success');
+    showToast(enabled ? 'Servidor MCP activado' : 'Servidor MCP desactivado', 'success');
   }
   await loadMcpStatus();
+}
+
+// Pill de la status-bar — invierte el estado actual cacheado.
+function toggleMcp() {
+  setMcpEnabled(!_mcpEnabled);
+}
+
+// Checkbox dentro de la tarjeta — onchange ya cambió .checked, lo persistimos.
+function onMcpToggleChange() {
+  setMcpEnabled(document.getElementById('mcpToggle').checked);
 }
 
 function copyMcpUrl() {
