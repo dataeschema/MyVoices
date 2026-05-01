@@ -26,11 +26,12 @@ piper-tts>=1.4.0           # Motor TTS ligero (ONNX, sin GPU requerida)
 
 # ── Nuevos motores TTS (opcionales, instalar por separado) ───────────────────
 # F5-TTS: calidad superior a XTTSv2, MIT, ~3 GB descarga, requiere 12+ GB VRAM
-#   pip install f5-tts
+#   pip install "f5-tts>=1.1.20"
+#   (>=1.1.20 acepta pydantic>=2.x; versiones anteriores requerían pydantic<=2.10.6)
 #
 # Chatterbox: rápido (<200ms), MIT, marca de agua Perth, requiere 4-6 GB VRAM
 #   pip install chatterbox-tts --no-deps
-#   pip install "transformers==5.2.0"   # después de instalar chatterbox
+#   pip install "transformers==5.2.0"
 #   (--no-deps evita que chatterbox baje torch==2.6.0 sobre la build CUDA 12.8)
 
 # ── Compatibilidad gruut / TTS ────────────────────────────────────────────────
