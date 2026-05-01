@@ -674,8 +674,9 @@ details[open] summary::before { transform: rotate(90deg); }
   <div class="card" style="max-width:980px;margin:0 auto">
     <div class="card-title">❓ Flujo de trabajo</div>
     <p style="color:var(--muted);font-size:13px;margin-bottom:24px">
-      MyVoices se usa en tres pasos: <b>1)</b> registrar una voz, <b>2)</b> crear un preset
-      con sus parámetros, <b>3)</b> usar el preset para reproducir, guardar o llamar desde la API.
+      MyVoices se usa en cuatro pasos: <b>1)</b> registrar una voz, <b>2)</b> crear un preset
+      con sus parámetros, <b>3)</b> usar el preset para reproducir, guardar o llamar desde la API,
+      <b>4)</b> conectar a un LLM vía MCP o recibir eventos en sistemas externos con webhooks.
     </p>
 
     <div class="help-flow">
@@ -807,6 +808,69 @@ Content-Type: application/json
           </div>
         </div>
       </div>
+
+      <div class="help-arrow">↓</div>
+
+      <!-- Paso 5: Cola de prioridad y webhooks -->
+      <div class="help-step">
+        <div class="help-step-num">5</div>
+        <div class="help-step-body">
+          <div class="help-step-title">⚡ Cola de prioridad y webhooks</div>
+          <div class="help-step-text">
+            Todas las peticiones de síntesis pasan por una <b>cola de prioridad</b>:
+            las llamadas de MCP y API externa se procesan antes que las de la UI,
+            y las frases guardadas tienen la prioridad más baja. Esto garantiza que
+            las peticiones del LLM nunca bloqueen la app.
+          </div>
+          <div class="help-step-text" style="margin-top:8px">
+            Los <b>webhooks</b> permiten notificar sistemas externos (OBS, Home Assistant, n8n…)
+            cada vez que termina una síntesis. El evento <code>speak_end</code> incluye
+            la voz usada, el texto, el origen (<code>MCP</code> / <code>API</code> / <code>UI</code>)
+            y la duración en milisegundos.
+          </div>
+          <pre class="code-block" style="margin-top:10px">POST /api/webhooks
+{ "url": "https://tu-servidor/hook", "events": "speak_end" }
+
+// Payload recibido:
+{
+  "event": "speak_end",
+  "voice": "SexyGirl",
+  "text": "Hola chat…",
+  "caller": "MCP",
+  "duration_ms": 1240
+}</pre>
+          <div class="help-step-text" style="margin-top:8px">
+            Gestiona los webhooks desde el panel <b>Webhooks</b> en la pestaña Principal:
+            añadir, eliminar y probar la conexión con un clic.
+          </div>
+        </div>
+      </div>
+
+      <div class="help-arrow">↓</div>
+
+      <!-- Paso 6: Visor de logs -->
+      <div class="help-step">
+        <div class="help-step-num">6</div>
+        <div class="help-step-body">
+          <div class="help-step-title">📋 Registro de actividad</div>
+          <div class="help-step-text">
+            El <b>Registro de actividad</b> (panel inferior de la pestaña Principal)
+            muestra cada llamada con su contexto completo:
+          </div>
+          <ul class="help-params">
+            <li><b>Origen</b> — badge de color: <span style="background:#7c3aed;color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700">MCP</span> <span style="background:#0369a1;color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700">API</span> <span style="background:#065f46;color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700">UI</span></li>
+            <li><b>Preset</b> — nombre del preset usado</li>
+            <li><b>Texto</b> — vista previa (primeros 60 caracteres)</li>
+            <li><b>ms</b> — duración de la síntesis en milisegundos</li>
+          </ul>
+          <div class="help-step-text">
+            Filtra por nivel (INFO / WARNING / ERROR) y por origen para ver solo
+            las llamadas que te interesan. El log se refresca automáticamente cada 5 s
+            cuando el panel está abierto.
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>

@@ -16,7 +16,9 @@ Desktop TTS app for streaming. Reads text with cloned voices using **XTTSv2** (G
 - **Radio effect**: bandpass 400–3400 Hz + soft clipping + noise
 - **Test panel**: pick a preset, listen and download the result
 - **Splash screen**: animated progress bar during startup while the model loads
-- **Log viewer**: activity log with auto-refresh, level filter and automatic rotation
+- **Log viewer**: activity log with auto-refresh, level/origin filters, and new columns — caller (MCP/API/UI), voice preset, text preview and synthesis duration
+- **Priority queue**: TTS requests are serialised through an `asyncio.PriorityQueue`; MCP/API calls take priority over UI and saved-phrase requests, eliminating event-loop deadlocks
+- **Webhook notifications**: register HTTP endpoints to receive `speak_end` events with voice, text, caller and duration; manageable from the UI
 - **Tests**: 168 unit and integration tests (DB, utils, API CRUD, UI markup, MCP), runnable without GPU
 - **CI**: GitHub Actions runs ruff + pytest on every push and PR
 - **MCP server (built-in)**: a [Model Context Protocol](https://modelcontextprotocol.io) endpoint mounted at `/mcp/`, **toggleable from the UI**, with Bearer-token auth. Lets an LLM (Claude Desktop, Claude Code, Cursor, Gemini CLI, ChatGPT…) list voices, speak text, and play saved phrases. A legacy `mcp_server.py` (stdio) is also shipped for clients that need it
@@ -152,6 +154,38 @@ Returns the WAV file directly (Content-Disposition: attachment).
 POST http://localhost:8000/api/phrases/{name}/play
 ```
 
+### Webhooks
+
+Register an HTTP endpoint to receive events when synthesis completes:
+
+```
+GET    http://localhost:8000/api/webhooks          → list registered webhooks
+POST   http://localhost:8000/api/webhooks          → add a webhook
+DELETE http://localhost:8000/api/webhooks/{id}     → remove a webhook
+POST   http://localhost:8000/api/webhooks/test/{id} → fire a test event
+```
+
+**Add a webhook:**
+```json
+POST /api/webhooks
+{ "url": "https://your-server/hook", "events": "speak_end" }
+```
+
+**Payload sent on `speak_end`:**
+```json
+{
+  "event": "speak_end",
+  "job_id": "a1b2c3d4",
+  "voice": "preset_name",
+  "text": "first 120 chars of the text",
+  "caller": "MCP",
+  "duration_ms": 1240
+}
+```
+
+`caller` is one of `MCP`, `API` or `UI`.  
+`events` can be `speak_end` or `*` (all events).
+
 ---
 
 ## MCP server (LLM integration)
@@ -217,6 +251,7 @@ curl -X POST http://localhost:8000/mcp/ \
 2. **Piper tab** → download a voice from the catalogue → registered automatically
 3. **Main tab** → pick a voice, tune speed/pitch/language/radio → save as preset
 4. Call the API with `{"voice": "preset_name", "text": "..."}` from SAMMI or any other system
+5. (Optional) Register webhooks in the **Webhooks** panel to receive `speak_end` events in external systems (OBS, Home Assistant, n8n…)
 
 The **Help** tab inside the app contains the same workflow as a visual diagram.
 
