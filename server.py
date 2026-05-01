@@ -203,6 +203,21 @@ _db_handler.setFormatter(logging.Formatter("%(name)s — %(message)s"))
 
 logging.getLogger().addHandler(_db_handler)
 logging.getLogger().setLevel(logging.INFO)
+
+class _SilenceProactorReset(logging.Filter):
+    """Silencia el traceback ConnectionResetError de _ProactorBasePipeTransport
+    que asyncio en Windows emite cuando un cliente MCP cierra el stream SSE.
+    Es ruido cosmético: la sesión MCP funciona, solo molesta en el visor."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        if "_ProactorBasePipeTransport._call_connection_lost" not in record.getMessage():
+            return True
+        exc = record.exc_info
+        if exc and exc[0] is ConnectionResetError:
+            return False
+        return "ConnectionResetError" not in (record.exc_text or "")
+
+logging.getLogger("asyncio").addFilter(_SilenceProactorReset())
+
 _uv_access = logging.getLogger("uvicorn.access")
 if not _uv_access.propagate:
     _uv_access.addHandler(_db_handler)
