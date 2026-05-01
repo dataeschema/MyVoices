@@ -144,10 +144,22 @@ def init_db() -> None:
             );
 
             CREATE TABLE IF NOT EXISTS logs (
-                id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                ts      TEXT NOT NULL DEFAULT (datetime('now')),
-                level   TEXT NOT NULL DEFAULT 'INFO',
-                message TEXT NOT NULL
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL DEFAULT (datetime('now')),
+                level       TEXT NOT NULL DEFAULT 'INFO',
+                message     TEXT NOT NULL,
+                caller      TEXT,
+                voice_preset TEXT,
+                text_preview TEXT,
+                duration_ms  INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                url        TEXT NOT NULL UNIQUE,
+                events     TEXT NOT NULL DEFAULT 'speak_end',
+                enabled    INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
 
@@ -164,6 +176,31 @@ def init_db() -> None:
             )
     except sqlite3.OperationalError:
         pass  # column already exists
+
+    # Migration: add enriched columns to logs
+    for col, defn in [
+        ("caller",       "TEXT"),
+        ("voice_preset", "TEXT"),
+        ("text_preview", "TEXT"),
+        ("duration_ms",  "INTEGER"),
+    ]:
+        try:
+            with _conn() as db:
+                db.execute(f"ALTER TABLE logs ADD COLUMN {col} {defn}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
+    # Migration: create webhooks table if missing
+    with _conn() as db:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                url        TEXT NOT NULL UNIQUE,
+                events     TEXT NOT NULL DEFAULT 'speak_end',
+                enabled    INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
 
 
 def _migrate_old_appdata() -> None:
@@ -386,11 +423,16 @@ def get_phrase_by_name(name: str) -> dict | None:
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 
-def log_event(level: str, message: str) -> None:
+def log_event(level: str, message: str, *,
+              caller: str | None = None,
+              voice_preset: str | None = None,
+              text_preview: str | None = None,
+              duration_ms: int | None = None) -> None:
     with _conn() as db:
         db.execute(
-            "INSERT INTO logs (level, message) VALUES (?, ?)",
-            (level.upper(), message),
+            "INSERT INTO logs (level, message, caller, voice_preset, text_preview, duration_ms) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (level.upper(), message, caller, voice_preset, text_preview, duration_ms),
         )
         count = db.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
         if count > _LOG_MAX_ROWS:
@@ -402,23 +444,61 @@ def log_event(level: str, message: str) -> None:
 
 
 def get_logs(limit: int = 200, offset: int = 0,
-             level: str | None = None) -> list[dict]:
+             level: str | None = None,
+             caller: str | None = None) -> list[dict]:
+    where, params = [], []
+    if level:
+        where.append("level = ?")
+        params.append(level.upper())
+    if caller:
+        where.append("caller = ?")
+        params.append(caller.upper())
+    sql = "SELECT id, ts, level, message, caller, voice_preset, text_preview, duration_ms FROM logs"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    params += [limit, offset]
     with _conn() as db:
-        if level:
-            rows = db.execute(
-                "SELECT id, ts, level, message FROM logs WHERE level = ? "
-                "ORDER BY id DESC LIMIT ? OFFSET ?",
-                (level.upper(), limit, offset),
-            ).fetchall()
-        else:
-            rows = db.execute(
-                "SELECT id, ts, level, message FROM logs "
-                "ORDER BY id DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
+        rows = db.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 
 
 def clear_logs() -> None:
     with _conn() as db:
         db.execute("DELETE FROM logs")
+
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
+
+def list_webhooks() -> list[dict]:
+    with _conn() as db:
+        rows = db.execute(
+            "SELECT id, url, events, enabled, created_at FROM webhooks ORDER BY id ASC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_webhook(url: str, events: str = "speak_end") -> int:
+    with _conn() as db:
+        cur = db.execute(
+            "INSERT INTO webhooks (url, events) VALUES (?, ?) "
+            "ON CONFLICT(url) DO UPDATE SET events=excluded.events, enabled=1",
+            (url, events),
+        )
+        return cur.lastrowid or db.execute(
+            "SELECT id FROM webhooks WHERE url=?", (url,)
+        ).fetchone()[0]
+
+
+def delete_webhook(webhook_id: int) -> None:
+    with _conn() as db:
+        db.execute("DELETE FROM webhooks WHERE id=?", (webhook_id,))
+
+
+def get_active_webhooks(event: str = "speak_end") -> list[str]:
+    with _conn() as db:
+        rows = db.execute(
+            "SELECT url FROM webhooks WHERE enabled=1 AND (events='*' OR events LIKE ?)",
+            (f"%{event}%",),
+        ).fetchall()
+    return [r["url"] for r in rows]

@@ -528,18 +528,45 @@ details[open] summary::before { transform: rotate(90deg); }
       <summary>Registro de actividad</summary>
       <div class="log-toolbar">
         <select id="logLevel" onchange="loadLogs()" style="width:120px">
-          <option value="">Todos</option>
+          <option value="">Todos niveles</option>
           <option value="INFO">INFO</option>
           <option value="WARNING">WARNING</option>
           <option value="ERROR">ERROR</option>
+        </select>
+        <select id="logCaller" onchange="loadLogs()" style="width:110px">
+          <option value="">Todos orígenes</option>
+          <option value="MCP">MCP</option>
+          <option value="API">API</option>
+          <option value="UI">UI</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↻ Actualizar</button>
         <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑 Limpiar</button>
       </div>
       <div class="log-table-wrap">
         <table>
-          <thead><tr><th>Tiempo</th><th>Nivel</th><th>Mensaje</th></tr></thead>
-          <tbody id="logBody"><tr><td colspan="3" class="empty">Sin registros</td></tr></tbody>
+          <thead><tr><th>Tiempo</th><th>Nivel</th><th>Origen</th><th>Preset</th><th>Texto</th><th>ms</th><th>Mensaje</th></tr></thead>
+          <tbody id="logBody"><tr><td colspan="7" class="empty">Sin registros</td></tr></tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
+  <!-- Webhooks (full width) -->
+  <div class="card full-col">
+    <details id="webhookDetails">
+      <summary>Webhooks</summary>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input id="webhookUrl" type="url" placeholder="https://..." style="flex:1;min-width:200px">
+        <select id="webhookEvents" style="width:140px">
+          <option value="speak_end">speak_end</option>
+          <option value="*">todos</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addWebhook()">+ Añadir</button>
+      </div>
+      <div class="log-table-wrap">
+        <table>
+          <thead><tr><th>URL</th><th>Eventos</th><th>Acciones</th></tr></thead>
+          <tbody id="webhookBody"><tr><td colspan="3" class="empty">Sin webhooks</td></tr></tbody>
         </table>
       </div>
     </details>
@@ -835,6 +862,11 @@ function setupTabs() {
     } else {
       clearInterval(_logTimer);
     }
+  });
+
+  const whDetails = document.getElementById('webhookDetails');
+  whDetails.addEventListener('toggle', () => {
+    if (whDetails.open) loadWebhooks();
   });
 }
 
@@ -1430,18 +1462,30 @@ async function deletePhrase(id) {
 
 // ── Logs ───────────────────────────────────────────────────────────────────
 async function loadLogs() {
-  const level = document.getElementById('logLevel').value;
-  const url   = '/api/logs?limit=200' + (level ? '&level=' + level : '');
+  const level  = document.getElementById('logLevel').value;
+  const caller = document.getElementById('logCaller').value;
+  let url = '/api/logs?limit=200';
+  if (level)  url += '&level='  + level;
+  if (caller) url += '&caller=' + caller;
   const rows  = await fetch(url).then(r => r.json());
   const tbody = document.getElementById('logBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin registros</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Sin registros</td></tr>';
     return;
   }
+  const callerBadge = c => {
+    const colors = { MCP: '#7c3aed', API: '#0369a1', UI: '#065f46' };
+    const bg = colors[c] || '#374151';
+    return c ? `<span style="background:${bg};color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700">${esc(c)}</span>` : '';
+  };
   tbody.innerHTML = rows.map(r =>
     `<tr>
       <td style="white-space:nowrap;color:var(--muted);font-size:11px">${esc(r.ts)}</td>
       <td><span class="log-level-${r.level}" style="font-size:11px;font-weight:600">${r.level}</span></td>
+      <td>${callerBadge(r.caller)}</td>
+      <td style="font-size:11px;white-space:nowrap">${esc(r.voice_preset || '')}</td>
+      <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.text_preview || '')}">${esc(r.text_preview ? r.text_preview.slice(0,60) + (r.text_preview.length>60?'…':'') : '')}</td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${r.duration_ms != null ? r.duration_ms+'ms' : ''}</td>
       <td style="font-size:12px;word-break:break-all">${esc(r.message)}</td>
     </tr>`).join('');
 }
@@ -1451,6 +1495,50 @@ async function clearLogs() {
   await fetch('/api/logs', { method: 'DELETE' });
   loadLogs();
   showToast('Logs limpiados', 'info');
+}
+
+// ── Webhooks ───────────────────────────────────────────────────────────────
+async function loadWebhooks() {
+  const hooks = await fetch('/api/webhooks').then(r => r.json());
+  const tbody = document.getElementById('webhookBody');
+  if (!hooks.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty">Sin webhooks</td></tr>';
+    return;
+  }
+  tbody.innerHTML = hooks.map(h =>
+    `<tr>
+      <td style="font-size:12px;word-break:break-all">${esc(h.url)}</td>
+      <td style="font-size:12px">${esc(h.events)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick="testWebhook(${h.id})">Probar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteWebhook(${h.id})">✕</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function addWebhook() {
+  const url    = document.getElementById('webhookUrl').value.trim();
+  const events = document.getElementById('webhookEvents').value;
+  if (!url) return showToast('Introduce una URL válida', 'error');
+  await fetch('/api/webhooks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, events }),
+  });
+  document.getElementById('webhookUrl').value = '';
+  loadWebhooks();
+  showToast('Webhook añadido', 'success');
+}
+
+async function deleteWebhook(id) {
+  await fetch(`/api/webhooks/${id}`, { method: 'DELETE' });
+  loadWebhooks();
+  showToast('Webhook eliminado', 'info');
+}
+
+async function testWebhook(id) {
+  const r = await fetch(`/api/webhooks/test/${id}`, { method: 'POST' }).then(r => r.json());
+  showToast(`Test webhook → HTTP ${r.http_status || r.detail}`, r.status === 'ok' ? 'success' : 'error');
 }
 
 // ── XTTS tab ───────────────────────────────────────────────────────────────

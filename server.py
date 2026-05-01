@@ -80,9 +80,12 @@ _log = logging.getLogger("myvoices")
 
 from database import (
     add_voice,
+    add_webhook,
     clear_logs,
     delete_phrase,
     delete_voice_preset,
+    delete_webhook,
+    get_active_webhooks,
     get_logs,
     get_phrase,
     get_phrase_by_name,
@@ -94,6 +97,7 @@ from database import (
     list_phrases,
     list_voice_presets,
     list_voices,
+    list_webhooks,
     load_config,
     load_voice_preset,
     log_event,
@@ -315,14 +319,84 @@ async def _mcp_mount_dispatch(scope, receive, send):
     await _mcp_inner_asgi(scope, receive, send)
 
 
+# ── Cola de prioridad TTS ─────────────────────────────────────────────────────
+# Cada item: (priority, job_id, voice, text, caller, future)
+# priority: 0=alta (MCP/API externa), 1=normal (UI), 2=baja (frases automáticas)
+
+_tts_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+_tts_jobs: dict[str, dict] = {}  # job_id → {status, result, error}
+_tts_jobs_lock = threading.Lock()
+
+
+async def _tts_worker():
+    while True:
+        priority, job_id, voice, text, caller, fut = await _tts_queue.get()
+        with _tts_jobs_lock:
+            if job_id in _tts_jobs:
+                _tts_jobs[job_id]["status"] = "running"
+        t0 = time.monotonic()
+        try:
+            path = await asyncio.to_thread(_synth_to_file_sync, voice, text)
+            global _last_speak_path
+            with _last_speak_lock:
+                old = _last_speak_path
+                _last_speak_path = path
+            if old and old != path:
+                try: os.remove(old)
+                except Exception: pass
+            threading.Thread(target=play_audio_keep, args=(path,), daemon=True).start()
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            result = {"status": "success", "message": "Reproduciendo audio..."}
+            with _tts_jobs_lock:
+                _tts_jobs[job_id] = {"status": "success", "result": result}
+            log_event("INFO", f"speak: voice={voice!r} text={text[:60]!r}",
+                      caller=caller, voice_preset=voice,
+                      text_preview=text[:120], duration_ms=duration_ms)
+            asyncio.create_task(_fire_webhooks("speak_end", {
+                "job_id": job_id, "voice": voice,
+                "text": text[:120], "caller": caller, "duration_ms": duration_ms,
+            }))
+            if not fut.done():
+                fut.set_result(result)
+        except Exception as exc:
+            err = str(exc)
+            with _tts_jobs_lock:
+                _tts_jobs[job_id] = {"status": "error", "error": err}
+            log_event("ERROR", f"speak error: {err}",
+                      caller=caller, voice_preset=voice, text_preview=text[:120])
+            if not fut.done():
+                fut.set_exception(exc)
+        finally:
+            _tts_queue.task_done()
+
+
+async def _fire_webhooks(event: str, payload: dict) -> None:
+    urls = await asyncio.to_thread(get_active_webhooks, event)
+    if not urls:
+        return
+    import httpx as _httpx
+    async with _httpx.AsyncClient(timeout=5) as client:
+        for url in urls:
+            try:
+                await client.post(url, json={"event": event, **payload})
+            except Exception as exc:
+                _log.warning(f"Webhook {url} falló: {exc}")
+
+
 @asynccontextmanager
 async def _lifespan(_app):
     """En cada arranque (re)creamos el FastMCP server y su session_manager
     (que solo admite una llamada a `.run()` por instancia)."""
     global _mcp, _mcp_inner_asgi
     _mcp, _mcp_inner_asgi = _build_mcp()
+    worker_task = asyncio.create_task(_tts_worker())
     async with _mcp.session_manager.run():
         yield
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="MyVoices Service", lifespan=_lifespan)
@@ -1094,47 +1168,68 @@ async def api_delete_phrase(phrase_id: int):
 
 
 @app.post("/api/phrases/{phrase_name}/play")
-async def api_play_phrase(phrase_name: str):
+async def api_play_phrase(phrase_name: str, request: Request):
     phrase = get_phrase_by_name(phrase_name)
     if not phrase:
         raise HTTPException(404, f"Frase '{phrase_name}' no encontrada")
     preset_name = phrase.get("voice_preset_name")
     if not preset_name:
         raise HTTPException(400, "La frase no tiene preset de voz asignado")
-    return await _speak_with_preset(preset_name, phrase["text"])
+    caller = _detect_caller(request)
+    priority = 2  # frases = baja prioridad
+    job_id = str(_uuid.uuid4())[:8]
+    fut: asyncio.Future = asyncio.get_event_loop().create_future()
+    with _tts_jobs_lock:
+        _tts_jobs[job_id] = {"status": "queued"}
+    await _tts_queue.put((priority, job_id, preset_name, phrase["text"], caller, fut))
+    try:
+        return await asyncio.wait_for(asyncio.shield(fut), timeout=120)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Timeout esperando síntesis TTS")
 
 
 # ── Síntesis principal ────────────────────────────────────────────────────────
 
+import uuid as _uuid
+
+
+def _detect_caller(request: Request) -> str:
+    ua = request.headers.get("user-agent", "").lower()
+    if "python-httpx" in ua or "mcp" in ua:
+        return "MCP"
+    if "mozilla" in ua or "webkit" in ua or "chrome" in ua:
+        return "UI"
+    return "API"
+
+
 @app.post("/api/speak")
-async def api_speak(req: SpeakRequest):
+async def api_speak(req: SpeakRequest, request: Request):
     if not req.text.strip():
         raise HTTPException(400, "El campo 'text' no puede estar vacío")
     if not req.voice.strip():
         raise HTTPException(400, "El campo 'voice' (nombre del preset) no puede estar vacío")
 
-    voice = req.voice.strip()
-    text  = req.text.strip()
+    voice  = req.voice.strip()
+    text   = req.text.strip()
+    caller = _detect_caller(request)
+    priority = 0 if caller in ("MCP", "API") else 1
 
-    # Sintetizamos a un único fichero (mismo path que /api/speak/download)
-    # y lo cacheamos antes de reproducir. Así /api/speak/last devuelve
-    # exactamente el mismo audio que el usuario acaba de oír.
+    job_id = str(_uuid.uuid4())[:8]
+    fut: asyncio.Future = asyncio.get_event_loop().create_future()
+
+    with _tts_jobs_lock:
+        _tts_jobs[job_id] = {"status": "queued"}
+
+    await _tts_queue.put((priority, job_id, voice, text, caller, fut))
+
     try:
-        path = await asyncio.to_thread(_synth_to_file_sync, voice, text)
+        result = await asyncio.wait_for(asyncio.shield(fut), timeout=120)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Timeout esperando síntesis TTS")
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    global _last_speak_path
-    with _last_speak_lock:
-        old = _last_speak_path
-        _last_speak_path = path
-    if old and old != path:
-        try: os.remove(old)
-        except Exception: pass
-
-    threading.Thread(target=play_audio_keep, args=(path,), daemon=True).start()
-
-    return {"status": "success", "message": "Reproduciendo audio..."}
+    return result
 
 
 @app.get("/api/speak/last")
@@ -1170,14 +1265,57 @@ async def api_speak_download(req: SpeakRequest):
 # ── Logs ──────────────────────────────────────────────────────────────────────
 
 @app.get("/api/logs")
-async def api_get_logs(limit: int = 200, offset: int = 0, level: str = None):
-    return get_logs(limit=limit, offset=offset, level=level or None)
+async def api_get_logs(limit: int = 200, offset: int = 0,
+                       level: str = None, caller: str = None):
+    return get_logs(limit=limit, offset=offset,
+                    level=level or None, caller=caller or None)
 
 
 @app.delete("/api/logs")
 async def api_clear_logs():
     clear_logs()
     return {"status": "cleared"}
+
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
+
+class WebhookRequest(BaseModel):
+    url: str
+    events: str = "speak_end"
+
+
+@app.get("/api/webhooks")
+async def api_list_webhooks():
+    return list_webhooks()
+
+
+@app.post("/api/webhooks")
+async def api_add_webhook(req: WebhookRequest):
+    wid = add_webhook(req.url, req.events)
+    return {"id": wid, "url": req.url, "events": req.events}
+
+
+@app.delete("/api/webhooks/{webhook_id}")
+async def api_delete_webhook(webhook_id: int):
+    delete_webhook(webhook_id)
+    return {"status": "deleted"}
+
+
+@app.post("/api/webhooks/test/{webhook_id}")
+async def api_test_webhook(webhook_id: int):
+    hooks = list_webhooks()
+    hook = next((h for h in hooks if h["id"] == webhook_id), None)
+    if not hook:
+        raise HTTPException(404, "Webhook no encontrado")
+    import httpx as _httpx
+    try:
+        async with _httpx.AsyncClient(timeout=5) as client:
+            r = await client.post(hook["url"], json={
+                "event": "test", "message": "MyVoices webhook test"
+            })
+        return {"status": "ok", "http_status": r.status_code}
+    except Exception as exc:
+        raise HTTPException(502, f"No se pudo contactar con el webhook: {exc}")
 
 
 # ── MCP control ───────────────────────────────────────────────────────────────

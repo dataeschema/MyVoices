@@ -29,12 +29,12 @@ def _timeout() -> float:
     return float(os.getenv("MYVOICES_TIMEOUT", "60"))
 
 
-def _request(method: str, path: str, **kwargs):
-    """Llamada HTTP a la API de MyVoices con manejo uniforme de errores."""
+async def _request(method: str, path: str, **kwargs):
+    """Llamada HTTP async a la API de MyVoices con manejo uniforme de errores."""
     url = f"{_base_url()}{path}"
-    with httpx.Client(timeout=_timeout()) as client:
+    async with httpx.AsyncClient(timeout=_timeout()) as client:
         try:
-            r = client.request(method, url, **kwargs)
+            r = await client.request(method, url, **kwargs)
         except httpx.ConnectError as exc:
             raise RuntimeError(
                 f"No se pudo conectar a MyVoices en {_base_url()}. "
@@ -55,42 +55,42 @@ def _request(method: str, path: str, **kwargs):
         return r.text
 
 
-def _head(path: str):
+async def _head(path: str):
     url = f"{_base_url()}{path}"
-    with httpx.Client(timeout=_timeout()) as client:
-        return client.head(url)
+    async with httpx.AsyncClient(timeout=_timeout()) as client:
+        return await client.head(url)
 
 
 def register_all(mcp: FastMCP) -> FastMCP:
     """Registra las 7 tools de MyVoices en la instancia FastMCP indicada."""
 
     @mcp.tool()
-    def get_status() -> dict:
+    async def get_status() -> dict:
         """Devuelve el estado del servidor MyVoices: motor TTS cargado,
         dispositivo (CPU/GPU), número de voces y presets registrados."""
-        return _request("GET", "/api/status")
+        return await _request("GET", "/api/status")
 
     @mcp.tool()
-    def list_voices() -> list:
+    async def list_voices() -> list:
         """Lista todas las voces TTS registradas (clonadas XTTS y voces
         Piper). Cada voz incluye id, name, engine y filename."""
-        return _request("GET", "/api/voices")
+        return await _request("GET", "/api/voices")
 
     @mcp.tool()
-    def list_presets() -> list:
+    async def list_presets() -> list:
         """Lista todos los presets de voz. Un preset combina una voz con
         parámetros (speed, pitch, language, radio_effect) y se identifica
         por nombre — ese nombre es lo que se pasa a `speak`."""
-        return _request("GET", "/api/voice-presets")
+        return await _request("GET", "/api/voice-presets")
 
     @mcp.tool()
-    def list_phrases() -> list:
+    async def list_phrases() -> list:
         """Lista todas las frases guardadas. Cada frase tiene un nombre,
         un texto y opcionalmente un preset asociado."""
-        return _request("GET", "/api/phrases")
+        return await _request("GET", "/api/phrases")
 
     @mcp.tool()
-    def speak(voice: str, text: str) -> dict:
+    async def speak(voice: str, text: str) -> dict:
         """Sintetiza y reproduce `text` con el preset llamado `voice`.
 
         El audio sale por los altavoces del equipo donde corre la app de
@@ -101,20 +101,20 @@ def register_all(mcp: FastMCP) -> FastMCP:
             voice: nombre de un preset (ver `list_presets`)
             text:  texto a leer
         """
-        return _request("POST", "/api/speak", json={"voice": voice, "text": text})
+        return await _request("POST", "/api/speak", json={"voice": voice, "text": text})
 
     @mcp.tool()
-    def play_phrase(name: str) -> dict:
+    async def play_phrase(name: str) -> dict:
         """Reproduce una frase guardada por nombre (usa el preset asociado a
         la frase). Lanza error si la frase no existe o no tiene preset."""
-        return _request("POST", f"/api/phrases/{name}/play")
+        return await _request("POST", f"/api/phrases/{name}/play")
 
     @mcp.tool()
-    def download_last_audio() -> dict:
+    async def download_last_audio() -> dict:
         """Devuelve metadatos del último WAV reproducido por `speak` (cacheado
         en el servidor). Útil para confirmar que hay audio disponible para
         descarga manual desde la UI."""
-        r = _head("/api/speak/last")
+        r = await _head("/api/speak/last")
         if r.status_code == 404:
             return {"available": False,
                     "detail": "No hay audio reciente. Llama a `speak` primero."}
