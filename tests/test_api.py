@@ -407,7 +407,9 @@ def test_play_phrase_by_name(client, monkeypatch):
     def fake_synth(preset_name, text):
         captured["preset"] = preset_name
         captured["text"]   = text
-        import tempfile, wave as wv, io
+        import io
+        import tempfile
+        import wave as wv
         buf = io.BytesIO()
         with wv.open(buf, "wb") as wf:
             wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(22050)

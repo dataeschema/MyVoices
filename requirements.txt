@@ -18,21 +18,20 @@ pydantic==2.12.5
 
 # ── TTS / Audio ───────────────────────────────────────────────────────────────
 TTS==0.22.0
-# transformers 5.x remueve BeamSearchScorer (usado por TTS==0.22.0 en stream_generator.py).
-# server.py inyecta un shim dummy para que el import no falle (la ruta de síntesis no lo usa).
-# Chatterbox requiere transformers>=5.2.0 (MinPLogitsWarper).
-transformers>=5.2.0
+# transformers: TTS 0.22.0 requiere >=4.33. En instalaciones locales con Chatterbox
+# se sube a 5.x; el shim en server.py parchea BeamSearchScorer removido en 5.x.
+transformers>=4.33
 pygame==2.6.1
 piper-tts>=1.4.0           # Motor TTS ligero (ONNX, sin GPU requerida)
 
-# ── Nuevos motores TTS ────────────────────────────────────────────────────────
-# F5-TTS: calidad superior a XTTSv2, MIT license. Requiere 12+ GB VRAM. (~3 GB descarga)
-# Instalar con: pip install f5-tts
-# (no se pone aquí para evitar que pip lo meta en el proceso normal con torch 2.6 de PyPI)
+# ── Nuevos motores TTS (opcionales, instalar por separado) ───────────────────
+# F5-TTS: calidad superior a XTTSv2, MIT, ~3 GB descarga, requiere 12+ GB VRAM
+#   pip install f5-tts
 #
-# Chatterbox: rápido (<200ms), MIT license. Requiere 4-6 GB VRAM. Marca de agua Perth.
-# Instalar con: pip install chatterbox-tts --no-deps
-# (el pin torch==2.6.0 de chatterbox entra en conflicto con CUDA 12.8; --no-deps lo evita)
+# Chatterbox: rápido (<200ms), MIT, marca de agua Perth, requiere 4-6 GB VRAM
+#   pip install chatterbox-tts --no-deps
+#   pip install "transformers==5.2.0"   # después de instalar chatterbox
+#   (--no-deps evita que chatterbox baje torch==2.6.0 sobre la build CUDA 12.8)
 
 # ── Compatibilidad gruut / TTS ────────────────────────────────────────────────
 # gruut 2.2.3 (dependencia de TTS) requiere estas versiones estrictas.
