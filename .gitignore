@@ -67,3 +67,6 @@ Desktop.ini
 .env
 *.pem
 *.key
+
+# ── MCP (contiene tokens de autorización) ──────────────────────────────────────
+.mcp.json
