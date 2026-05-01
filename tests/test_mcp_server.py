@@ -7,8 +7,9 @@ Verifican:
   - errores HTTP y de conexión se traducen a mensajes claros
   - la URL base respeta las variables de entorno
 
-Mockeamos `httpx.Client` con un MockTransport para no necesitar el servidor.
+Mockeamos `httpx.AsyncClient` con un MockTransport para no necesitar el servidor.
 """
+import asyncio
 import os
 import sys
 
@@ -35,14 +36,14 @@ def mcp(tools_module):
 
 
 def _patch_transport(monkeypatch, tools_module, handler):
-    """Sustituye httpx.Client en mcp_tools por uno con MockTransport."""
-    original_client = httpx.Client
+    """Sustituye httpx.AsyncClient en mcp_tools por uno con MockTransport."""
+    original_async_client = httpx.AsyncClient
 
-    def fake_client(*args, **kwargs):
+    def fake_async_client(*args, **kwargs):
         kwargs["transport"] = httpx.MockTransport(handler)
-        return original_client(*args, **kwargs)
+        return original_async_client(*args, **kwargs)
 
-    monkeypatch.setattr(tools_module.httpx, "Client", fake_client)
+    monkeypatch.setattr(tools_module.httpx, "AsyncClient", fake_async_client)
 
 
 def _ok(payload):
@@ -51,7 +52,14 @@ def _ok(payload):
 
 def _tool(mcp, name):
     """Devuelve la función Python registrada como tool MCP `name`."""
-    return mcp._tool_manager._tools[name].fn
+    fn = mcp._tool_manager._tools[name].fn
+    # Las tools son async; envolver para que los tests síncronos puedan llamarlas
+    import inspect
+    if inspect.iscoroutinefunction(fn):
+        def sync_wrapper(*args, **kwargs):
+            return asyncio.run(fn(*args, **kwargs))
+        return sync_wrapper
+    return fn
 
 
 # ── Registro de herramientas ──────────────────────────────────────────────────

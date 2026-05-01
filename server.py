@@ -46,6 +46,26 @@ def _mock_numba_and_llvmlite():
 
 _mock_numba_and_llvmlite()
 
+
+def _shim_transformers_beam_search():
+    """BeamSearchScorer fue eliminado en transformers 5.x.
+    TTS==0.22.0 lo importa en stream_generator.py pero solo lo usa en rutas de
+    beam search que no se invocan durante tts_to_file(). Inyectamos clases dummy
+    para que el import no falle."""
+    try:
+        import transformers as _tr
+        if not hasattr(_tr, "BeamSearchScorer"):
+            class _BeamSearchScorer:
+                pass
+            class _ConstrainedBeamSearchScorer:
+                pass
+            _tr.BeamSearchScorer             = _BeamSearchScorer
+            _tr.ConstrainedBeamSearchScorer  = _ConstrainedBeamSearchScorer
+    except Exception:
+        pass
+
+_shim_transformers_beam_search()
+
 if getattr(sys, "frozen", False):
     # console=False → stdin/stdout/stderr son None; TTS llama input() para los ToS.
     import builtins
@@ -121,6 +141,18 @@ try:
     PIPER_AVAILABLE = True
 except Exception:
     PIPER_AVAILABLE = False
+
+try:
+    from f5_tts.api import F5TTS
+    F5TTS_AVAILABLE = True
+except Exception:
+    F5TTS_AVAILABLE = False
+
+try:
+    from chatterbox.tts import ChatterboxTTS
+    CHATTERBOX_AVAILABLE = True
+except Exception:
+    CHATTERBOX_AVAILABLE = False
 
 # ── Compatibilidad torch.load ─────────────────────────────────────────────────
 _torch_load_orig = torch.load
@@ -323,7 +355,7 @@ async def _mcp_mount_dispatch(scope, receive, send):
 # Cada item: (priority, job_id, voice, text, caller, future)
 # priority: 0=alta (MCP/API externa), 1=normal (UI), 2=baja (frases automáticas)
 
-_tts_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+_tts_queue: asyncio.PriorityQueue | None = None
 _tts_jobs: dict[str, dict] = {}  # job_id → {status, result, error}
 _tts_jobs_lock = threading.Lock()
 
@@ -387,7 +419,8 @@ async def _fire_webhooks(event: str, payload: dict) -> None:
 async def _lifespan(_app):
     """En cada arranque (re)creamos el FastMCP server y su session_manager
     (que solo admite una llamada a `.run()` por instancia)."""
-    global _mcp, _mcp_inner_asgi
+    global _mcp, _mcp_inner_asgi, _tts_queue
+    _tts_queue = asyncio.PriorityQueue()  # create fresh per event loop
     _mcp, _mcp_inner_asgi = _build_mcp()
     worker_task = asyncio.create_task(_tts_worker())
     async with _mcp.session_manager.run():
@@ -490,6 +523,50 @@ if os.getenv("SKIP_MODEL_LOAD") == "1":
 else:
     device          = "cuda" if torch.cuda.is_available() else "cpu"
     tts, model_status = _load_tts_model()
+
+# ── F5-TTS (lazy) ─────────────────────────────────────────────────────────────
+_f5tts_model:   "F5TTS | None"        = None
+_f5tts_status:  str                   = "not_loaded"
+
+
+def _load_f5tts_model():
+    global _f5tts_model, _f5tts_status
+    if _f5tts_model is not None:
+        return _f5tts_model, _f5tts_status
+    if not F5TTS_AVAILABLE:
+        return None, "f5-tts no instalado"
+    try:
+        _log.info("Cargando F5-TTS (primera vez, descarga ~3 GB si no está en caché)…")
+        _f5tts_model = F5TTS()
+        _f5tts_status = "ok"
+        _log.info("F5-TTS listo.")
+    except Exception as e:
+        _f5tts_status = str(e)
+        _log.error(f"Error cargando F5-TTS: {e}")
+    return _f5tts_model, _f5tts_status
+
+
+# ── Chatterbox TTS (lazy) ─────────────────────────────────────────────────────
+_chatterbox_model:  "ChatterboxTTS | None" = None
+_chatterbox_status: str                    = "not_loaded"
+
+
+def _load_chatterbox_model():
+    global _chatterbox_model, _chatterbox_status
+    if _chatterbox_model is not None:
+        return _chatterbox_model, _chatterbox_status
+    if not CHATTERBOX_AVAILABLE:
+        return None, "chatterbox-tts no instalado"
+    try:
+        _log.info("Cargando Chatterbox TTS…")
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+        _chatterbox_model = ChatterboxTTS.from_pretrained(device=dev)
+        _chatterbox_status = "ok"
+        _log.info(f"Chatterbox TTS listo en {dev}.")
+    except Exception as e:
+        _chatterbox_status = str(e)
+        _log.error(f"Error cargando Chatterbox: {e}")
+    return _chatterbox_model, _chatterbox_status
 
 # ── Audio ─────────────────────────────────────────────────────────────────────
 _audio_lock = threading.Lock()
@@ -640,6 +717,10 @@ async def _speak_with_preset(preset_name: str, text: str) -> dict:
 
     if engine == "piper":
         return await _synth_piper(text, filename, speaker_id, speed, pitch, radio)
+    elif engine == "f5tts":
+        return await _synth_f5tts(text, filename, speed, pitch, radio)
+    elif engine == "chatterbox":
+        return await _synth_chatterbox(text, filename, speed, pitch, radio)
     else:
         return await _synth_xtts(text, filename, speed, pitch, radio, language)
 
@@ -754,6 +835,102 @@ async def _synth_xtts(text: str, wav_filename: str, speed: float,
             "message": f"Reproduciendo {n} fragmento{'s' if n > 1 else ''}..."}
 
 
+async def _synth_f5tts(text: str, wav_filename: str, speed: float,
+                       pitch: float, radio: bool) -> dict:
+    model, status = _load_f5tts_model()
+    if model is None:
+        raise HTTPException(500, f"F5-TTS no disponible: {status}")
+    if not wav_filename:
+        raise HTTPException(400, "El preset no tiene archivo WAV de referencia")
+    ref_wav = VOICES_DIR / wav_filename
+    if not ref_wav.exists():
+        raise HTTPException(400, f"Archivo de voz '{wav_filename}' no encontrado")
+
+    chunks  = split_into_chunks(text)
+    audio_q: queue.Queue = queue.Queue()
+
+    def _synth_worker():
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            path = tmp.name; tmp.close()
+            try:
+                model.infer(ref_file=str(ref_wav), ref_text="",
+                            gen_text=chunk, output_file=path)
+                if radio:                     apply_radio_effect(path)
+                if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
+                if abs(pitch) >= 0.1:         apply_pitch(path, pitch)
+                audio_q.put(path)
+            except Exception as exc:
+                _log.error(f"[F5-TTS] Error en fragmento: {exc}")
+                try: os.remove(path)
+                except Exception: pass
+        audio_q.put(None)
+
+    def _play_worker():
+        while True:
+            p = audio_q.get()
+            if p is None:
+                break
+            play_audio_keep(p)
+
+    threading.Thread(target=_synth_worker, daemon=True).start()
+    threading.Thread(target=_play_worker,  daemon=True).start()
+    n = len(chunks)
+    return {"status": "success", "engine": "f5tts",
+            "message": f"Reproduciendo {n} fragmento{'s' if n > 1 else ''}..."}
+
+
+async def _synth_chatterbox(text: str, wav_filename: str, speed: float,
+                            pitch: float, radio: bool) -> dict:
+    model, status = _load_chatterbox_model()
+    if model is None:
+        raise HTTPException(500, f"Chatterbox TTS no disponible: {status}")
+    if not wav_filename:
+        raise HTTPException(400, "El preset no tiene archivo WAV de referencia")
+    ref_wav = VOICES_DIR / wav_filename
+    if not ref_wav.exists():
+        raise HTTPException(400, f"Archivo de voz '{wav_filename}' no encontrado")
+
+    chunks  = split_into_chunks(text)
+    audio_q: queue.Queue = queue.Queue()
+
+    def _synth_worker():
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            path = tmp.name; tmp.close()
+            try:
+                wav_tensor = model.generate(chunk, audio_prompt_path=str(ref_wav))
+                audio_np = wav_tensor.squeeze().cpu().numpy()
+                scipy_wavfile.write(path, 24000,
+                                    (audio_np * 32767).astype(np.int16))
+                if radio:                     apply_radio_effect(path)
+                if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
+                if abs(pitch) >= 0.1:         apply_pitch(path, pitch)
+                audio_q.put(path)
+            except Exception as exc:
+                _log.error(f"[Chatterbox] Error en fragmento: {exc}")
+                try: os.remove(path)
+                except Exception: pass
+        audio_q.put(None)
+
+    def _play_worker():
+        while True:
+            p = audio_q.get()
+            if p is None:
+                break
+            play_audio_keep(p)
+
+    threading.Thread(target=_synth_worker, daemon=True).start()
+    threading.Thread(target=_play_worker,  daemon=True).start()
+    n = len(chunks)
+    return {"status": "success", "engine": "chatterbox",
+            "message": f"Reproduciendo {n} fragmento{'s' if n > 1 else ''}..."}
+
+
 # ── Síntesis a fichero (para descarga) ───────────────────────────────────────
 def _synth_to_file_sync(preset_name: str, text: str) -> str:
     """Sintetiza texto con el preset indicado y devuelve la ruta de un fichero WAV."""
@@ -789,6 +966,43 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
                 voice.synthesize_wav(chunk, wf, syn_config=syn_cfg)
             if radio:              apply_radio_effect(path)
             if abs(pitch) >= 0.1:  apply_pitch(path, pitch)
+            chunk_files.append(path)
+    elif engine == "f5tts":
+        model, status = _load_f5tts_model()
+        if model is None:
+            raise ValueError(f"F5-TTS no disponible: {status}")
+        ref_wav = VOICES_DIR / filename
+        if not ref_wav.exists():
+            raise ValueError(f"Archivo de voz '{filename}' no encontrado")
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            path = tmp.name; tmp.close()
+            model.infer(ref_file=str(ref_wav), ref_text="",
+                        gen_text=chunk, output_file=path)
+            if radio:                     apply_radio_effect(path)
+            if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
+            if abs(pitch) >= 0.1:         apply_pitch(path, pitch)
+            chunk_files.append(path)
+    elif engine == "chatterbox":
+        model, status = _load_chatterbox_model()
+        if model is None:
+            raise ValueError(f"Chatterbox TTS no disponible: {status}")
+        ref_wav = VOICES_DIR / filename
+        if not ref_wav.exists():
+            raise ValueError(f"Archivo de voz '{filename}' no encontrado")
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            path = tmp.name; tmp.close()
+            wav_tensor = model.generate(chunk, audio_prompt_path=str(ref_wav))
+            audio_np = wav_tensor.squeeze().cpu().numpy()
+            scipy_wavfile.write(path, 24000, (audio_np * 32767).astype(np.int16))
+            if radio:                     apply_radio_effect(path)
+            if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
+            if abs(pitch) >= 0.1:         apply_pitch(path, pitch)
             chunk_files.append(path)
     else:
         global tts
@@ -856,16 +1070,24 @@ async def index():
 
 @app.get("/api/status")
 async def api_status():
-    installed_piper = len(list(PIPER_DIR.glob("*.onnx")))
-    installed_xtts  = len(list_voices(engine="xtts"))
+    installed_piper       = len(list(PIPER_DIR.glob("*.onnx")))
+    installed_xtts        = len(list_voices(engine="xtts"))
+    installed_f5tts       = len(list_voices(engine="f5tts"))
+    installed_chatterbox  = len(list_voices(engine="chatterbox"))
     return {
-        "model":          model_status,
-        "device":         device,
-        "gpu_name":       torch.cuda.get_device_name(0) if device == "cuda" else None,
-        "piper_available": PIPER_AVAILABLE,
-        "voices_xtts":    installed_xtts,
-        "voices_piper":   installed_piper,
-        "presets":        len(list_voice_presets()),
+        "model":                model_status,
+        "device":               device,
+        "gpu_name":             torch.cuda.get_device_name(0) if device == "cuda" else None,
+        "piper_available":      PIPER_AVAILABLE,
+        "f5tts_available":      F5TTS_AVAILABLE,
+        "f5tts_status":         _f5tts_status,
+        "chatterbox_available": CHATTERBOX_AVAILABLE,
+        "chatterbox_status":    _chatterbox_status,
+        "voices_xtts":          installed_xtts,
+        "voices_piper":         installed_piper,
+        "voices_f5tts":         installed_f5tts,
+        "voices_chatterbox":    installed_chatterbox,
+        "presets":              len(list_voice_presets()),
     }
 
 
@@ -979,6 +1201,76 @@ async def api_delete_piper_voice(voice_id: int):
     _piper_cache.pop(filename, None)
     remove_voice(voice_id)
     return {"status": "deleted", "files": deleted}
+
+
+# ── F5-TTS: registro de voces ─────────────────────────────────────────────────
+
+@app.get("/api/voices/f5tts")
+async def api_list_f5tts_voices():
+    return list_voices(engine="f5tts")
+
+
+@app.post("/api/voices/f5tts")
+async def api_upload_f5tts_voice(file: UploadFile = File(...), name: str = Form(...)):
+    if not file.filename.lower().endswith(".wav"):
+        raise HTTPException(400, "Solo se aceptan archivos .wav")
+    safe = _sanitize_name(name)
+    if not safe:
+        raise HTTPException(400, "Nombre inválido")
+    filename = f"{safe}.wav"
+    dest = VOICES_DIR / filename
+    with open(dest, "wb") as out:
+        shutil.copyfileobj(file.file, out)
+    voice_id = add_voice("f5tts", safe, filename)
+    return get_voice(voice_id)
+
+
+@app.delete("/api/voices/f5tts/{voice_id}")
+async def api_delete_f5tts_voice(voice_id: int):
+    voice = get_voice(voice_id)
+    if not voice or voice["engine"] != "f5tts":
+        raise HTTPException(404, "Voz F5-TTS no encontrada")
+    if voice.get("filename"):
+        wav = VOICES_DIR / voice["filename"]
+        if wav.exists():
+            wav.unlink()
+    remove_voice(voice_id)
+    return {"status": "deleted"}
+
+
+# ── Chatterbox: registro de voces ─────────────────────────────────────────────
+
+@app.get("/api/voices/chatterbox")
+async def api_list_chatterbox_voices():
+    return list_voices(engine="chatterbox")
+
+
+@app.post("/api/voices/chatterbox")
+async def api_upload_chatterbox_voice(file: UploadFile = File(...), name: str = Form(...)):
+    if not file.filename.lower().endswith(".wav"):
+        raise HTTPException(400, "Solo se aceptan archivos .wav")
+    safe = _sanitize_name(name)
+    if not safe:
+        raise HTTPException(400, "Nombre inválido")
+    filename = f"{safe}.wav"
+    dest = VOICES_DIR / filename
+    with open(dest, "wb") as out:
+        shutil.copyfileobj(file.file, out)
+    voice_id = add_voice("chatterbox", safe, filename)
+    return get_voice(voice_id)
+
+
+@app.delete("/api/voices/chatterbox/{voice_id}")
+async def api_delete_chatterbox_voice(voice_id: int):
+    voice = get_voice(voice_id)
+    if not voice or voice["engine"] != "chatterbox":
+        raise HTTPException(404, "Voz Chatterbox no encontrada")
+    if voice.get("filename"):
+        wav = VOICES_DIR / voice["filename"]
+        if wav.exists():
+            wav.unlink()
+    remove_voice(voice_id)
+    return {"status": "deleted"}
 
 
 # ── Piper: catálogo HuggingFace ───────────────────────────────────────────────

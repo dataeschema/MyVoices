@@ -112,9 +112,9 @@ def test_help_tab_has_main_steps():
     assert panel, "could not isolate help tab panel"
     body = panel.group(0)
     nums = re.findall(r'class="help-step-num">(\d)</div>', body)
-    # Pasos 1 (clonar voz), 2 (preset) y 4 (MCP) tienen card con numeral.
-    # El paso 3 (usar el preset) se renderiza con un título + 5 branches.
-    assert nums == ["1", "2", "4"], f"expected steps 1, 2 and 4, got {nums}"
+    # Pasos 1 (clonar voz), 2 (preset), 4 (MCP), 5 (cola+webhooks), 6 (logs)
+    # tienen card con numeral. El paso 3 se renderiza con título + 5 branches.
+    assert nums == ["1", "2", "4", "5", "6"], f"expected steps 1,2,4,5,6, got {nums}"
     assert "help-step-title-3" in body, "missing 3rd step title"
 
 

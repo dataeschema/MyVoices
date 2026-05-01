@@ -404,12 +404,19 @@ def test_play_phrase_by_name(client, monkeypatch):
 
     captured = {}
 
-    async def fake_speak(preset, text):
-        captured["preset"] = preset
+    def fake_synth(preset_name, text):
+        captured["preset"] = preset_name
         captured["text"]   = text
-        return {"status": "ok"}
+        import tempfile, wave as wv, io
+        buf = io.BytesIO()
+        with wv.open(buf, "wb") as wf:
+            wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(22050)
+            wf.writeframes(b"\x00\x00")
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+        tmp.write(buf.getvalue()); tmp.close()
+        return tmp.name
 
-    monkeypatch.setattr(server, "_speak_with_preset", fake_speak)
+    monkeypatch.setattr(server, "_synth_to_file_sync", fake_synth)
 
     # Setup: create voice → preset → phrase
     vid = _create_voice(client, "VozPlay").json()["id"]

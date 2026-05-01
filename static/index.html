@@ -314,6 +314,8 @@ details[open] summary::before { transform: rotate(90deg); }
     <button class="tab-btn active" data-tab="main">Principal</button>
     <button class="tab-btn" data-tab="xtts">🎤 XTTS2</button>
     <button class="tab-btn" data-tab="piper">🤖 Piper</button>
+    <button class="tab-btn" data-tab="f5tts">🔊 F5-TTS</button>
+    <button class="tab-btn" data-tab="chatterbox">🗣 Chatterbox</button>
     <button class="tab-btn" data-tab="help">❓ Ayuda</button>
   </nav>
   <div class="header-right"></div>
@@ -323,6 +325,8 @@ details[open] summary::before { transform: rotate(90deg); }
 <div id="status-bar">
   <div id="st-xtts" class="status-pill"><span class="dot dot-warn"></span>XTTSv2: cargando…</div>
   <div id="st-piper" class="status-pill"><span class="dot dot-warn"></span>Piper: —</div>
+  <div id="st-f5tts" class="status-pill"><span class="dot dot-warn"></span>F5-TTS: —</div>
+  <div id="st-chatterbox" class="status-pill"><span class="dot dot-warn"></span>Chatterbox: —</div>
   <div id="st-voices" class="status-pill" style="color:var(--text)">Voces: —</div>
   <div id="st-presets" class="status-pill" style="color:var(--text)">Presets: —</div>
   <div id="st-mcp" class="status-pill" style="cursor:pointer" title="Click para activar/desactivar el servidor MCP"
@@ -669,6 +673,90 @@ details[open] summary::before { transform: rotate(90deg); }
   </div>
 </div>
 
+<!-- ══════════════════════ TAB: F5-TTS ══════════════════════════════════════ -->
+<div class="tab-panel" id="tab-f5tts">
+  <div style="max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+    <div class="card">
+      <div class="card-title">🔊 Registrar voz F5-TTS</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
+        Sube un WAV de referencia de <b>3–5 segundos</b> con voz clara y sin ruido de fondo.
+        F5-TTS usa ese audio para clonar la voz con calidad superior a XTTSv2.
+        El modelo se descarga automáticamente la primera vez (~3 GB).
+      </p>
+      <div class="drop-zone" id="f5ttsDropZone" onclick="document.getElementById('f5ttsWavFile').click()">
+        <input type="file" id="f5ttsWavFile" accept=".wav" onchange="onF5ttsWavSelected(this)">
+        <div id="f5ttsDropLabel">📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo</div>
+      </div>
+      <div id="f5ttsUploadForm" style="display:none;margin-top:14px">
+        <div class="form-row">
+          <label>Nombre de la voz</label>
+          <input type="text" id="f5ttsVoiceName" placeholder="Ej: Mi_Voz_F5">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary" id="f5ttsUploadBtn" onclick="uploadF5ttsVoice()">📤 Registrar voz</button>
+          <button class="btn btn-secondary" onclick="cancelF5ttsUpload()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗂 Voces F5-TTS registradas</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Nombre</th><th>Archivo</th><th>Creada</th><th></th></tr></thead>
+          <tbody id="f5ttsVoicesBody">
+            <tr><td colspan="5" class="empty">No hay voces F5-TTS todavía</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════ TAB: CHATTERBOX ═══════════════════════════════════ -->
+<div class="tab-panel" id="tab-chatterbox">
+  <div style="max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+    <div class="card">
+      <div class="card-title">🗣 Registrar voz Chatterbox</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
+        Sube un WAV de referencia de <b>5+ segundos</b> con voz clara y sin ruido de fondo.
+        Chatterbox es muy rápido (&lt;200 ms por fragmento) y compatible con 23 idiomas.
+        <b>Nota:</b> los audios generados incluyen una marca de agua imperceptible (Perth/Resemble AI).
+      </p>
+      <div class="drop-zone" id="chatterboxDropZone" onclick="document.getElementById('chatterboxWavFile').click()">
+        <input type="file" id="chatterboxWavFile" accept=".wav" onchange="onChatterboxWavSelected(this)">
+        <div id="chatterboxDropLabel">📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo</div>
+      </div>
+      <div id="chatterboxUploadForm" style="display:none;margin-top:14px">
+        <div class="form-row">
+          <label>Nombre de la voz</label>
+          <input type="text" id="chatterboxVoiceName" placeholder="Ej: Mi_Voz_CB">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary" id="chatterboxUploadBtn" onclick="uploadChatterboxVoice()">📤 Registrar voz</button>
+          <button class="btn btn-secondary" onclick="cancelChatterboxUpload()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗂 Voces Chatterbox registradas</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Nombre</th><th>Archivo</th><th>Creada</th><th></th></tr></thead>
+          <tbody id="chatterboxVoicesBody">
+            <tr><td colspan="5" class="empty">No hay voces Chatterbox todavía</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- ══════════════════════ TAB: AYUDA ═══════════════════════════════════════ -->
 <div class="tab-panel" id="tab-help">
   <div class="card" style="max-width:980px;margin:0 auto">
@@ -914,6 +1002,8 @@ function setupTabs() {
         loadPiperVoices();
         if (!catalogData.length) fetchPiperCatalog();
       }
+      if (id === 'f5tts')      loadF5ttsVoices();
+      if (id === 'chatterbox') loadChatterboxVoices();
       if (id === 'help') loadMcpClients();
     });
   });
@@ -970,8 +1060,22 @@ async function loadStatus() {
       ? `<span class="dot dot-ok"></span>Piper: OK`
       : `<span class="dot dot-warn"></span>Piper: no disponible`;
 
+    const f5El = document.getElementById('st-f5tts');
+    if (f5El) f5El.innerHTML = r.f5tts_available
+      ? (r.f5tts_status === 'ok'
+          ? `<span class="dot dot-ok"></span>F5-TTS: listo`
+          : `<span class="dot dot-warn"></span>F5-TTS: disponible`)
+      : `<span class="dot dot-warn"></span>F5-TTS: no instalado`;
+
+    const cbEl = document.getElementById('st-chatterbox');
+    if (cbEl) cbEl.innerHTML = r.chatterbox_available
+      ? (r.chatterbox_status === 'ok'
+          ? `<span class="dot dot-ok"></span>Chatterbox: listo`
+          : `<span class="dot dot-warn"></span>Chatterbox: disponible`)
+      : `<span class="dot dot-warn"></span>Chatterbox: no instalado`;
+
     document.getElementById('st-voices').innerHTML =
-      `🎙 Voces: ${r.voices_xtts} XTTS · ${r.voices_piper} Piper`;
+      `🎙 Voces: ${r.voices_xtts} XTTS · ${r.voices_piper} Piper · ${r.voices_f5tts||0} F5 · ${r.voices_chatterbox||0} CB`;
     document.getElementById('st-presets').innerHTML =
       `⚡ Presets: ${r.presets}`;
   } catch (e) {
@@ -1169,6 +1273,26 @@ function populateVoiceSelects() {
   if (piper.length) {
     const g = document.createElement('optgroup'); g.label = '🤖 Piper';
     piper.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.id; o.textContent = `[${v.id}] ${v.name}`;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  }
+  const f5tts      = allVoices.filter(v => v.engine === 'f5tts');
+  const chatterbox = allVoices.filter(v => v.engine === 'chatterbox');
+  if (f5tts.length) {
+    const g = document.createElement('optgroup'); g.label = '🔊 F5-TTS';
+    f5tts.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.id; o.textContent = `[${v.id}] ${v.name}`;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  }
+  if (chatterbox.length) {
+    const g = document.createElement('optgroup'); g.label = '🗣 Chatterbox';
+    chatterbox.forEach(v => {
       const o = document.createElement('option');
       o.value = v.id; o.textContent = `[${v.id}] ${v.name}`;
       g.appendChild(o);
@@ -1700,6 +1824,8 @@ async function renameVoice(id, engine) {
     showToast('Nombre actualizado', 'success');
     await loadVoices();
     if (engine === 'xtts') await loadXttsVoices();
+    else if (engine === 'f5tts') await loadF5ttsVoices();
+    else if (engine === 'chatterbox') await loadChatterboxVoices();
     else await loadPiperVoices();
   } else {
     const e = await res.json(); showToast(e.detail || 'Error', 'error');
@@ -1713,6 +1839,151 @@ async function deleteVoice(id) {
     showToast('Voz eliminada', 'info');
     await loadVoices(); await loadPresets(); await loadStatus();
     await loadXttsVoices();
+    await loadF5ttsVoices();
+    await loadChatterboxVoices();
+  }
+}
+
+// ── F5-TTS tab ─────────────────────────────────────────────────────────────
+let _f5ttsDraggedFile = null;
+
+function onF5ttsWavSelected(input) {
+  _f5ttsDraggedFile = null;
+  if (input.files[0]) showF5ttsUploadForm(input.files[0]);
+}
+
+function showF5ttsUploadForm(file) {
+  document.getElementById('f5ttsUploadForm').style.display = 'block';
+  document.getElementById('f5ttsVoiceName').value = file.name.replace(/\.wav$/i, '');
+  document.getElementById('f5ttsDropLabel').textContent = '✅ ' + file.name;
+  _f5ttsDraggedFile = file;
+}
+
+function cancelF5ttsUpload() {
+  _f5ttsDraggedFile = null;
+  document.getElementById('f5ttsUploadForm').style.display = 'none';
+  document.getElementById('f5ttsWavFile').value = '';
+  document.getElementById('f5ttsDropLabel').textContent = '📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo';
+}
+
+async function uploadF5ttsVoice() {
+  const file = _f5ttsDraggedFile || document.getElementById('f5ttsWavFile').files[0];
+  const name = document.getElementById('f5ttsVoiceName').value.trim();
+  if (!file) { showToast('Selecciona un archivo WAV', 'error'); return; }
+  if (!name) { showToast('Escribe un nombre para la voz', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  fd.append('name', name);
+  const btn = document.getElementById('f5ttsUploadBtn');
+  btn.disabled = true; btn.textContent = 'Subiendo…';
+  const res = await fetch('/api/voices/f5tts', { method: 'POST', body: fd });
+  btn.disabled = false; btn.textContent = '📤 Registrar voz';
+  if (res.ok) {
+    const v = await res.json();
+    showToast(`Voz "${v.name}" registrada (ID ${v.id})`, 'success');
+    cancelF5ttsUpload();
+    await loadF5ttsVoices(); await loadVoices(); await loadStatus();
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error al subir', 'error');
+  }
+}
+
+async function loadF5ttsVoices() {
+  const voices = await fetch('/api/voices/f5tts').then(r => r.json());
+  const tbody  = document.getElementById('f5ttsVoicesBody');
+  if (!voices.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay voces F5-TTS todavía</td></tr>';
+    return;
+  }
+  tbody.innerHTML = voices.map(v => `
+    <tr id="f5tts-row-${v.id}">
+      <td style="color:var(--muted)">${v.id}</td>
+      <td>
+        <div class="editable-name">
+          <input type="text" value="${esc(v.name)}" id="f5tts-name-${v.id}" style="width:160px">
+          <button class="btn btn-secondary btn-sm" onclick="renameVoice(${v.id},'f5tts')">✎</button>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${esc(v.filename)}</td>
+      <td style="color:var(--muted);font-size:11px">${v.created_at ? v.created_at.slice(0,10) : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteVoiceEngine(${v.id},'f5tts')">🗑</button></td>
+    </tr>`).join('');
+}
+
+// ── Chatterbox tab ─────────────────────────────────────────────────────────
+let _chatterboxDraggedFile = null;
+
+function onChatterboxWavSelected(input) {
+  _chatterboxDraggedFile = null;
+  if (input.files[0]) showChatterboxUploadForm(input.files[0]);
+}
+
+function showChatterboxUploadForm(file) {
+  document.getElementById('chatterboxUploadForm').style.display = 'block';
+  document.getElementById('chatterboxVoiceName').value = file.name.replace(/\.wav$/i, '');
+  document.getElementById('chatterboxDropLabel').textContent = '✅ ' + file.name;
+  _chatterboxDraggedFile = file;
+}
+
+function cancelChatterboxUpload() {
+  _chatterboxDraggedFile = null;
+  document.getElementById('chatterboxUploadForm').style.display = 'none';
+  document.getElementById('chatterboxWavFile').value = '';
+  document.getElementById('chatterboxDropLabel').textContent = '📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo';
+}
+
+async function uploadChatterboxVoice() {
+  const file = _chatterboxDraggedFile || document.getElementById('chatterboxWavFile').files[0];
+  const name = document.getElementById('chatterboxVoiceName').value.trim();
+  if (!file) { showToast('Selecciona un archivo WAV', 'error'); return; }
+  if (!name) { showToast('Escribe un nombre para la voz', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  fd.append('name', name);
+  const btn = document.getElementById('chatterboxUploadBtn');
+  btn.disabled = true; btn.textContent = 'Subiendo…';
+  const res = await fetch('/api/voices/chatterbox', { method: 'POST', body: fd });
+  btn.disabled = false; btn.textContent = '📤 Registrar voz';
+  if (res.ok) {
+    const v = await res.json();
+    showToast(`Voz "${v.name}" registrada (ID ${v.id})`, 'success');
+    cancelChatterboxUpload();
+    await loadChatterboxVoices(); await loadVoices(); await loadStatus();
+  } else {
+    const e = await res.json(); showToast(e.detail || 'Error al subir', 'error');
+  }
+}
+
+async function loadChatterboxVoices() {
+  const voices = await fetch('/api/voices/chatterbox').then(r => r.json());
+  const tbody  = document.getElementById('chatterboxVoicesBody');
+  if (!voices.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay voces Chatterbox todavía</td></tr>';
+    return;
+  }
+  tbody.innerHTML = voices.map(v => `
+    <tr id="chatterbox-row-${v.id}">
+      <td style="color:var(--muted)">${v.id}</td>
+      <td>
+        <div class="editable-name">
+          <input type="text" value="${esc(v.name)}" id="chatterbox-name-${v.id}" style="width:160px">
+          <button class="btn btn-secondary btn-sm" onclick="renameVoice(${v.id},'chatterbox')">✎</button>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${esc(v.filename)}</td>
+      <td style="color:var(--muted);font-size:11px">${v.created_at ? v.created_at.slice(0,10) : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteVoiceEngine(${v.id},'chatterbox')">🗑</button></td>
+    </tr>`).join('');
+}
+
+async function deleteVoiceEngine(id, engine) {
+  if (!confirm('¿Eliminar esta voz? Los presets que la usen también se eliminarán.')) return;
+  const res = await fetch(`/api/voices/${engine}/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast('Voz eliminada', 'info');
+    await loadVoices(); await loadPresets(); await loadStatus();
+    if (engine === 'f5tts') await loadF5ttsVoices();
+    if (engine === 'chatterbox') await loadChatterboxVoices();
   }
 }
 
