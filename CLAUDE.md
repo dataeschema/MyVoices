@@ -45,10 +45,18 @@ Estas reglas aplican **siempre**, sin que el usuario las tenga que pedir.
   que rompe MCP).
 
 ### 6. PyInstaller
-- Cambios en deps suelen requerir actualizar `MyVoices.spec` (`hiddenimports` o
-  `datas` con `safe_collect("nombre_paquete")`). Si añado un nuevo motor TTS
-  opcional, lo dejo fuera del spec para no inflar el bundle (el usuario lo
-  instala con `pip` post-build).
+- Cambios en deps suelen requerir actualizar `MyVoices.spec` (`hiddenimports` y
+  `datas` con `safe_collect("nombre_paquete")`).
+- **Paquetes que usan `@torch.jit.script`** (F5-TTS / `x_transformers` /
+  `vocos` / `torchdiffeq` / `ema_pytorch` / `conformer` / `chatterbox`) **DEBEN**
+  declararse con `include_py_files=True`. TorchScript hace `inspect.getsource()`
+  en runtime y necesita los `.py` originales — no solo bytecode.
+- **Paquetes con datos pretrained** (perth: `perth_net_250000.pth.tar` +
+  `hparams.yaml`; gruut_lang_*: lexicons; piper_phonemize: espeak-ng data) deben
+  estar en `datas` para que PyInstaller los copie a `_internal/`.
+- Si el .exe falla con `OSError: Can't get source for <function X>` o
+  `AssertionError` opaco al cargar un motor → casi siempre falta un paquete en
+  `datas` o falta `include_py_files=True`.
 
 ### 7. Commits
 - Mensaje en inglés, formato corto (1ª línea < 80 chars). Cuerpo opcional con

@@ -54,6 +54,25 @@ piper_phonemize_datas = safe_collect("piper_phonemize")
 piper_datas           = safe_collect("piper")
 onnxruntime_datas     = safe_collect("onnxruntime")
 
+# F5-TTS y x_transformers usan @torch.jit.script (TorchScript), que llama a
+# inspect.getsource() y necesita los .py originales — no solo bytecode.
+f5_tts_datas         = safe_collect("f5_tts",         include_py_files=True)
+x_transformers_datas = safe_collect("x_transformers", include_py_files=True)
+vocos_datas          = safe_collect("vocos",          include_py_files=True)
+torchdiffeq_datas    = safe_collect("torchdiffeq",    include_py_files=True)
+ema_pytorch_datas    = safe_collect("ema_pytorch",    include_py_files=True)
+hydra_datas          = safe_collect("hydra")
+omegaconf_datas      = safe_collect("omegaconf")
+cached_path_datas    = safe_collect("cached_path")
+
+# Chatterbox + perth (marca de agua) — perth incluye hparams.yaml y un
+# checkpoint .pth.tar (~37 MB) en perth_net/pretrained/implicit/.
+chatterbox_datas = safe_collect("chatterbox", include_py_files=True)
+perth_datas      = safe_collect("perth")
+s3tokenizer_datas = safe_collect("s3tokenizer")
+diffusers_datas   = safe_collect("diffusers")
+conformer_datas   = safe_collect("conformer", include_py_files=True)
+
 a = Analysis(
     ["main.py"],
     pathex=[],
@@ -87,6 +106,21 @@ a = Analysis(
         *piper_phonemize_datas,
         *piper_datas,
         *onnxruntime_datas,
+        # F5-TTS + deps que usan @torch.jit.script
+        *f5_tts_datas,
+        *x_transformers_datas,
+        *vocos_datas,
+        *torchdiffeq_datas,
+        *ema_pytorch_datas,
+        *hydra_datas,
+        *omegaconf_datas,
+        *cached_path_datas,
+        # Chatterbox + perth (con checkpoint pretrained ~37 MB)
+        *chatterbox_datas,
+        *perth_datas,
+        *s3tokenizer_datas,
+        *diffusers_datas,
+        *conformer_datas,
     ],
     hiddenimports=[
         # uvicorn
@@ -179,6 +213,29 @@ a = Analysis(
         "piper_phonemize",
         "onnxruntime",
         "onnxruntime.capi._pybind_state",
+        # F5-TTS y dependencias
+        "f5_tts",
+        "f5_tts.api",
+        "f5_tts.model",
+        "f5_tts.infer.utils_infer",
+        "x_transformers",
+        "x_transformers.attend",
+        "vocos",
+        "torchdiffeq",
+        "ema_pytorch",
+        "hydra",
+        "hydra.utils",
+        "omegaconf",
+        "cached_path",
+        # Chatterbox y dependencias (perth incluye watermark + checkpoint)
+        "chatterbox",
+        "chatterbox.tts",
+        "perth",
+        "perth.perth_net",
+        "perth.perth_net.perth_net_implicit",
+        "s3tokenizer",
+        "diffusers",
+        "conformer",
     ],
     hookspath=[],
     hooksconfig={},
