@@ -142,18 +142,6 @@ try:
 except Exception:
     PIPER_AVAILABLE = False
 
-try:
-    from f5_tts.api import F5TTS
-    F5TTS_AVAILABLE = True
-except Exception:
-    F5TTS_AVAILABLE = False
-
-try:
-    from chatterbox.tts import ChatterboxTTS
-    CHATTERBOX_AVAILABLE = True
-except Exception:
-    CHATTERBOX_AVAILABLE = False
-
 # ── Compatibilidad torch.load ─────────────────────────────────────────────────
 _torch_load_orig = torch.load
 def _torch_load_compat(*args, **kwargs):
@@ -223,6 +211,21 @@ import pygame
 from scipy import signal as scipy_signal
 from scipy.io import wavfile as scipy_wavfile
 from TTS.api import TTS
+
+# ── F5-TTS y Chatterbox: importar DESPUÉS de los parches de torchaudio ───────
+# f5_tts.api causa segfault si torchaudio no está parcheado primero.
+
+try:
+    from f5_tts.api import F5TTS
+    F5TTS_AVAILABLE = True
+except Exception:
+    F5TTS_AVAILABLE = False
+
+try:
+    from chatterbox.tts import ChatterboxTTS
+    CHATTERBOX_AVAILABLE = True
+except Exception:
+    CHATTERBOX_AVAILABLE = False
 
 
 # ── Logging handler → SQLite ──────────────────────────────────────────────────
