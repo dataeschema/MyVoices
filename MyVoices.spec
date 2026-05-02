@@ -90,6 +90,14 @@ s3tokenizer_datas = safe_collect("s3tokenizer")
 diffusers_datas   = safe_collect("diffusers")
 conformer_datas   = safe_collect("conformer", include_py_files=True)
 
+# Tokenizadores multilingües que Chatterbox carga eagerly (no condicional al
+# language_id pasado): chino (spacy_pkuseg + rjieba), japonés (pykakasi).
+# spacy_pkuseg/dicts/default.pkl = 4.3 MB, pykakasi diccionarios ~10 MB.
+spacy_pkuseg_datas = safe_collect("spacy_pkuseg")
+pykakasi_datas     = safe_collect("pykakasi")
+rjieba_datas       = safe_collect("rjieba")
+jaconv_datas       = safe_collect("jaconv")
+
 a = Analysis(
     ["main.py"],
     pathex=[],
@@ -138,6 +146,10 @@ a = Analysis(
         *s3tokenizer_datas,
         *diffusers_datas,
         *conformer_datas,
+        *spacy_pkuseg_datas,
+        *pykakasi_datas,
+        *rjieba_datas,
+        *jaconv_datas,
     ],
     hiddenimports=[
         # uvicorn
@@ -254,6 +266,10 @@ a = Analysis(
         "s3tokenizer",
         "diffusers",
         "conformer",
+        "spacy_pkuseg",
+        "pykakasi",
+        "rjieba",
+        "jaconv",
     ],
     hookspath=[],
     hooksconfig={},
