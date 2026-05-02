@@ -881,6 +881,7 @@ Content-Type: application/json
             <li><code>speak(voice, text)</code> — sintetiza y reproduce</li>
             <li><code>play_phrase(name)</code> — dispara una frase guardada</li>
             <li><code>download_last_audio</code> — metadatos del último WAV cacheado</li>
+            <li><code>get_logs</code>, <code>get_diagnostics</code>, <code>load_model</code>, <code>set_verbose</code> — <i>diagnóstico</i> (para que el LLM pueda depurar errores sin pedirte logs)</li>
           </ul>
           <div class="help-step-text" style="margin-top:8px">
             <b>Antes de conectar un cliente</b>: activa el servidor MCP desde la
@@ -955,6 +956,19 @@ Content-Type: application/json
             Filtra por nivel (INFO / WARNING / ERROR) y por origen para ver solo
             las llamadas que te interesan. El log se refresca automáticamente cada 5 s
             cuando el panel está abierto.
+          </div>
+          <div class="help-step-text" style="margin-top:8px">
+            <b>Modo verbose:</b> para errores opacos, activa el modo verbose con
+            <code>POST /api/verbose/true</code> (o vía la tool MCP <code>set_verbose</code>).
+            Así los logs incluyen tracebacks completos y nivel DEBUG. Recuerda
+            apagarlo después con <code>POST /api/verbose/false</code>. También
+            puedes lanzar la app con <code>MYVOICES_VERBOSE=1</code>.
+          </div>
+          <div class="help-step-text" style="margin-top:8px">
+            <b>Diagnóstico rápido:</b> <code>GET /api/diagnostics</code> devuelve
+            el estado de cada motor (con el traceback de imports si fallaron) y
+            las versiones de paquetes Python clave. Útil para depurar problemas
+            de compatibilidad sin abrir un terminal.
           </div>
         </div>
       </div>

@@ -217,6 +217,10 @@ Lanza `python mcp_server.py` como subprocess desde la config de tu cliente. El s
 | `speak(voice, text)` | Sintetiza y reproduce `text` con el preset indicado |
 | `play_phrase(name)` | Reproduce una frase guardada por nombre |
 | `download_last_audio` | Metadatos del último WAV cacheado |
+| `get_logs` | Últimos N logs filtrables por nivel, origen y subcadena |
+| `get_diagnostics` | Estado completo: motores, errores de import, versiones de paquetes |
+| `load_model` | Carga bajo demanda un motor TTS (xtts/f5tts/chatterbox) |
+| `set_verbose` | Activa/desactiva modo verbose (DEBUG + tracebacks completos) |
 
 ### Clientes soportados
 
@@ -254,6 +258,34 @@ curl -X POST http://localhost:8000/mcp/ \
 5. (Opcional) Registra webhooks en el panel **Webhooks** para recibir eventos `speak_end` en sistemas externos (OBS, Home Assistant, n8n…)
 
 La pestaña **Ayuda** dentro de la app contiene el mismo flujo en forma de diagrama visual.
+
+---
+
+## Modo verbose y diagnóstico
+
+Cuando un motor TTS no carga o un fragmento falla con un error opaco:
+
+```bash
+# Activar modo verbose (DEBUG + tracebacks completos)
+curl -X POST http://localhost:8000/api/verbose/true
+
+# O desde un cliente MCP:
+# tool: set_verbose(enabled=true)
+
+# Ver el estado completo de los motores y errores de import
+curl http://localhost:8000/api/diagnostics
+# Equivalente MCP: tool: get_diagnostics
+
+# Leer los últimos 50 errores
+curl 'http://localhost:8000/api/logs?level=ERROR&limit=50'
+```
+
+`get_diagnostics` devuelve para cada motor: si está disponible, su status,
+y el `import_error` (con traceback) si la importación falló. También las
+versiones instaladas de torch, transformers, TTS, f5-tts, chatterbox.
+
+También puedes activar verbose desde el lanzamiento con la variable de
+entorno `MYVOICES_VERBOSE=1`.
 
 ---
 

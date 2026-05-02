@@ -617,3 +617,46 @@ def test_load_model_chatterbox_not_installed(client, monkeypatch):
     monkeypatch.setattr(server, "CHATTERBOX_AVAILABLE", False)
     r = client.post("/api/models/load/chatterbox")
     assert r.status_code == 503
+
+
+# ── /api/diagnostics ──────────────────────────────────────────────────────────
+
+def test_diagnostics_returns_engine_status(client):
+    r = client.get("/api/diagnostics")
+    assert r.status_code == 200
+    data = r.json()
+    assert "engines" in data
+    assert "package_versions" in data
+    assert "verbose" in data
+    assert set(data["engines"].keys()) == {"xtts", "piper", "f5tts", "chatterbox"}
+    for eng in ("f5tts", "chatterbox"):
+        assert "available" in data["engines"][eng]
+        assert "import_error" in data["engines"][eng]
+
+
+def test_diagnostics_includes_package_versions(client):
+    r = client.get("/api/diagnostics").json()
+    versions = r["package_versions"]
+    assert "torch" in versions
+    assert "transformers" in versions
+
+
+# ── /api/verbose ──────────────────────────────────────────────────────────────
+
+def test_set_verbose_true(client):
+    r = client.post("/api/verbose/true")
+    assert r.status_code == 200
+    assert r.json()["verbose"] is True
+
+
+def test_set_verbose_false(client):
+    client.post("/api/verbose/true")
+    r = client.post("/api/verbose/false")
+    assert r.status_code == 200
+    assert r.json()["verbose"] is False
+
+
+def test_set_verbose_persists_in_config(client):
+    client.post("/api/verbose/true")
+    cfg = client.get("/api/config").json()
+    assert cfg["verbose"] == "true"

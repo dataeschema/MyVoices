@@ -217,6 +217,10 @@ Run `python mcp_server.py` as a subprocess from your client config. The script j
 | `speak(voice, text)` | Synthesize and play `text` with the named preset |
 | `play_phrase(name)` | Play a saved phrase by name |
 | `download_last_audio` | Metadata for the last cached WAV |
+| `get_logs` | Last N logs filtered by level, caller and substring |
+| `get_diagnostics` | Full state: engines, import errors, package versions |
+| `load_model` | Lazy-load a TTS engine (xtts/f5tts/chatterbox) |
+| `set_verbose` | Toggle verbose mode (DEBUG + full tracebacks) |
 
 ### Supported clients
 
@@ -254,6 +258,33 @@ curl -X POST http://localhost:8000/mcp/ \
 5. (Optional) Register webhooks in the **Webhooks** panel to receive `speak_end` events in external systems (OBS, Home Assistant, n8n…)
 
 The **Help** tab inside the app contains the same workflow as a visual diagram.
+
+---
+
+## Verbose mode and diagnostics
+
+When a TTS engine fails to load or you hit an opaque error:
+
+```bash
+# Enable verbose mode (DEBUG level + full tracebacks)
+curl -X POST http://localhost:8000/api/verbose/true
+
+# Or from an MCP client:
+# tool: set_verbose(enabled=true)
+
+# Inspect the full engine state and any import errors
+curl http://localhost:8000/api/diagnostics
+# MCP equivalent: tool: get_diagnostics
+
+# Read the last 50 errors
+curl 'http://localhost:8000/api/logs?level=ERROR&limit=50'
+```
+
+`get_diagnostics` returns per-engine: availability, status, and the
+`import_error` (with traceback) if the import failed. Also the installed
+versions of torch, transformers, TTS, f5-tts and chatterbox.
+
+You can also enable verbose at launch via env var `MYVOICES_VERBOSE=1`.
 
 ---
 

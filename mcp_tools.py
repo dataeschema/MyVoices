@@ -127,6 +127,57 @@ def register_all(mcp: FastMCP) -> FastMCP:
             "content_type": r.headers.get("content-type", "audio/wav"),
         }
 
+    # ── Tools de diagnóstico (para LLMs que ayudan a depurar) ────────────────
+
+    @mcp.tool()
+    async def get_logs(limit: int = 50, level: str = "",
+                       caller: str = "", contains: str = "") -> list:
+        """Devuelve los últimos `limit` logs de la app, opcionalmente filtrados
+        por nivel (INFO/WARNING/ERROR/DEBUG), origen (UI/API/MCP) y subcadena.
+        Útil para que un LLM pueda diagnosticar errores sin pedir al usuario
+        que copie y pegue logs.
+
+        Args:
+            limit:    máximo de logs a devolver (default 50, max 500)
+            level:    filtra por nivel exacto, vacío = todos
+            caller:   filtra por origen, vacío = todos
+            contains: solo logs cuyo mensaje contenga esta cadena (case-insensitive)
+        """
+        params = {"limit": str(min(max(limit, 1), 500))}
+        if level:  params["level"]  = level
+        if caller: params["caller"] = caller
+        rows = await _request("GET", "/api/logs", params=params) or []
+        if contains:
+            needle = contains.lower()
+            rows = [r for r in rows if needle in (r.get("message") or "").lower()]
+        return rows
+
+    @mcp.tool()
+    async def get_diagnostics() -> dict:
+        """Estado completo de la app: motor TTS cargado, errores de import de
+        cada motor (con traceback), versiones de paquetes Python clave (torch,
+        transformers, TTS, f5-tts, chatterbox), y modo verbose. Llamar antes
+        de intentar cargar un motor para saber por qué puede estar fallando."""
+        return await _request("GET", "/api/diagnostics")
+
+    @mcp.tool()
+    async def load_model(engine: str) -> dict:
+        """Intenta cargar el modelo TTS del motor indicado y devuelve el
+        resultado. Si falla, el campo `status` contiene el mensaje de error;
+        para el traceback completo, llamar después a `get_logs(level='ERROR')`.
+
+        Args:
+            engine: 'xtts', 'f5tts' o 'chatterbox'
+        """
+        return await _request("POST", f"/api/models/load/{engine}")
+
+    @mcp.tool()
+    async def set_verbose(enabled: bool) -> dict:
+        """Activa/desactiva el modo verbose (logs DEBUG + tracebacks completos).
+        Útil para reproducir un error con más contexto. La configuración
+        persiste en la DB hasta que se vuelva a llamar a esta tool."""
+        return await _request("POST", f"/api/verbose/{'true' if enabled else 'false'}")
+
     return mcp
 
 

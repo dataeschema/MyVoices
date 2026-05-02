@@ -215,33 +215,60 @@ from TTS.api import TTS
 # ── F5-TTS y Chatterbox: importar DESPUÉS de los parches de torchaudio ───────
 # f5_tts.api causa segfault si torchaudio no está parcheado primero.
 
+_F5TTS_IMPORT_ERROR     = ""
+_CHATTERBOX_IMPORT_ERROR = ""
+
 try:
     from f5_tts.api import F5TTS
     F5TTS_AVAILABLE = True
-except Exception:
+except Exception as _e:
+    import traceback as _tb_f5
     F5TTS_AVAILABLE = False
+    _F5TTS_IMPORT_ERROR = f"{type(_e).__name__}: {_e}\n{_tb_f5.format_exc()}"
 
 try:
     from chatterbox.tts import ChatterboxTTS
     CHATTERBOX_AVAILABLE = True
-except Exception:
+except Exception as _e:
+    import traceback as _tb_cb
     CHATTERBOX_AVAILABLE = False
+    _CHATTERBOX_IMPORT_ERROR = f"{type(_e).__name__}: {_e}\n{_tb_cb.format_exc()}"
 
 
 # ── Logging handler → SQLite ──────────────────────────────────────────────────
+# Modo verbose: env MYVOICES_VERBOSE=1 o config DB key "verbose"=true.
+# En verbose: nivel DEBUG y se incluye exc_info en el mensaje.
+
+def _verbose_enabled() -> bool:
+    if os.getenv("MYVOICES_VERBOSE", "").lower() in ("1", "true", "yes"):
+        return True
+    try:
+        return load_config().get("verbose", "false").lower() == "true"
+    except Exception:
+        return False
+
+VERBOSE = _verbose_enabled()
+
+
 class _DBLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            log_event(record.levelname, self.format(record))
+            msg = self.format(record)
+            if record.exc_info:
+                import traceback as _tb
+                msg += "\n" + "".join(_tb.format_exception(*record.exc_info))
+            log_event(record.levelname, msg)
         except Exception:
             pass
 
 _db_handler = _DBLogHandler()
-_db_handler.setLevel(logging.INFO)
+_db_handler.setLevel(logging.DEBUG if VERBOSE else logging.INFO)
 _db_handler.setFormatter(logging.Formatter("%(name)s — %(message)s"))
 
 logging.getLogger().addHandler(_db_handler)
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG if VERBOSE else logging.INFO)
+if VERBOSE:
+    logging.getLogger("myvoices").info("VERBOSE mode enabled (DEBUG level + tracebacks)")
 
 class _SilenceProactorReset(logging.Filter):
     """Silencia el traceback ConnectionResetError de _ProactorBasePipeTransport
@@ -544,8 +571,11 @@ def _load_f5tts_model():
         _f5tts_status = "ok"
         _log.info("F5-TTS listo.")
     except Exception as e:
-        _f5tts_status = str(e)
-        _log.error(f"Error cargando F5-TTS: {e}")
+        import traceback as _tb
+        tb = _tb.format_exc()
+        msg = f"{type(e).__name__}: {e}" if str(e) else f"{type(e).__name__} (sin mensaje)"
+        _f5tts_status = msg
+        _log.error(f"Error cargando F5-TTS: {msg}\n{tb}")
     return _f5tts_model, _f5tts_status
 
 
@@ -567,8 +597,11 @@ def _load_chatterbox_model():
         _chatterbox_status = "ok"
         _log.info(f"Chatterbox TTS listo en {dev}.")
     except Exception as e:
-        _chatterbox_status = str(e)
-        _log.error(f"Error cargando Chatterbox: {e}")
+        import traceback as _tb
+        tb = _tb.format_exc()
+        msg = f"{type(e).__name__}: {e}" if str(e) else f"{type(e).__name__} (sin mensaje)"
+        _chatterbox_status = msg
+        _log.error(f"Error cargando Chatterbox: {msg}\n{tb}")
     return _chatterbox_model, _chatterbox_status
 
 # ── Audio ─────────────────────────────────────────────────────────────────────
@@ -1103,15 +1136,66 @@ async def api_load_model(engine: str):
         return {"engine": "xtts", "status": st, "loaded": m is not None}
     if engine == "f5tts":
         if not F5TTS_AVAILABLE:
-            raise HTTPException(503, "f5-tts no instalado")
+            raise HTTPException(503, _F5TTS_IMPORT_ERROR or "f5-tts no instalado")
         m, st = await asyncio.to_thread(_load_f5tts_model)
         return {"engine": "f5tts", "status": st, "loaded": m is not None}
     if engine == "chatterbox":
         if not CHATTERBOX_AVAILABLE:
-            raise HTTPException(503, "chatterbox-tts no instalado")
+            raise HTTPException(503, _CHATTERBOX_IMPORT_ERROR or "chatterbox-tts no instalado")
         m, st = await asyncio.to_thread(_load_chatterbox_model)
         return {"engine": "chatterbox", "status": st, "loaded": m is not None}
     raise HTTPException(400, f"Motor desconocido: {engine}")
+
+
+@app.get("/api/diagnostics")
+async def api_diagnostics():
+    """Estado completo de la app para diagnóstico: import errors, status de cada
+    motor, versión de paquetes clave, y modo verbose. Pensado para que un cliente
+    MCP/LLM pueda investigar errores sin que el usuario tenga que copiar logs."""
+    pkg_versions = {}
+    for pkg in ("torch", "torchaudio", "transformers", "TTS",
+                "f5_tts", "chatterbox", "piper", "fastapi", "pydantic"):
+        try:
+            mod = __import__(pkg)
+            pkg_versions[pkg] = getattr(mod, "__version__", "unknown")
+        except Exception as e:
+            pkg_versions[pkg] = f"NOT_INSTALLED ({type(e).__name__})"
+    return {
+        "verbose":              VERBOSE,
+        "device":               device,
+        "gpu_name":             torch.cuda.get_device_name(0) if device == "cuda" else None,
+        "engines": {
+            "xtts": {
+                "available": tts is not None or model_status == "skipped",
+                "status":    model_status,
+            },
+            "piper":      {"available": PIPER_AVAILABLE, "import_error": ""},
+            "f5tts":      {"available": F5TTS_AVAILABLE,
+                           "status":    _f5tts_status,
+                           "import_error": _F5TTS_IMPORT_ERROR},
+            "chatterbox": {"available": CHATTERBOX_AVAILABLE,
+                           "status":    _chatterbox_status,
+                           "import_error": _CHATTERBOX_IMPORT_ERROR},
+        },
+        "package_versions": pkg_versions,
+    }
+
+
+@app.post("/api/verbose/{enabled}")
+async def api_set_verbose(enabled: str):
+    """Activa/desactiva modo verbose en runtime (afecta nuevos logs).
+    enabled: 'true' o 'false'. Persiste en la config DB."""
+    val = enabled.lower() in ("true", "1", "yes", "on")
+    cfg = load_config()
+    cfg["verbose"] = "true" if val else "false"
+    save_config(cfg)
+    new_level = logging.DEBUG if val else logging.INFO
+    logging.getLogger().setLevel(new_level)
+    _db_handler.setLevel(new_level)
+    global VERBOSE
+    VERBOSE = val
+    _log.info(f"Verbose mode {'enabled' if val else 'disabled'}")
+    return {"verbose": val}
 
 
 @app.get("/api/config")

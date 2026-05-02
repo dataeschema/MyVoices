@@ -73,6 +73,7 @@ _DEFAULT_CONFIG: dict[str, str] = {
     "language":    "es",
     "mcp_enabled": "false",  # MCP HTTP endpoint disabled by default
     "mcp_token":   "",       # Bearer token, generated on first enable
+    "verbose":     "false",  # DEBUG-level logging + tracebacks
 }
 
 _LOG_MAX_ROWS  = 600_000

@@ -64,10 +64,12 @@ def _tool(mcp, name):
 
 # ── Registro de herramientas ──────────────────────────────────────────────────
 
-def test_seven_tools_registered(mcp):
+def test_all_tools_registered(mcp):
     assert set(mcp._tool_manager._tools.keys()) == {
         "get_status", "list_voices", "list_presets", "list_phrases",
         "speak", "play_phrase", "download_last_audio",
+        # Diagnóstico
+        "get_logs", "get_diagnostics", "load_model", "set_verbose",
     }
 
 
@@ -236,3 +238,78 @@ def test_register_all_idempotent_on_separate_instances(tools_module):
     b = tools_module.build_mcp_server(name="B")
     assert "speak" in a._tool_manager._tools
     assert "speak" in b._tool_manager._tools
+
+
+# ── Tools de diagnóstico ──────────────────────────────────────────────────────
+
+def test_get_logs_calls_correct_endpoint(tools_module, mcp, monkeypatch):
+    seen = {}
+    def handler(req):
+        seen["url"]    = str(req.url)
+        seen["method"] = req.method
+        return _ok([{"id": 1, "ts": "now", "level": "INFO",
+                     "message": "hola", "caller": "API"}])
+    _patch_transport(monkeypatch, tools_module, handler)
+    out = _tool(mcp, "get_logs")(limit=10)
+    assert seen["method"] == "GET"
+    assert "/api/logs" in seen["url"]
+    assert "limit=10" in seen["url"]
+    assert isinstance(out, list)
+    assert out[0]["message"] == "hola"
+
+
+def test_get_logs_filters_by_contains(tools_module, mcp, monkeypatch):
+    rows = [
+        {"id": 1, "level": "ERROR", "message": "Chatterbox falló"},
+        {"id": 2, "level": "INFO",  "message": "todo bien"},
+        {"id": 3, "level": "ERROR", "message": "F5 error"},
+    ]
+    _patch_transport(monkeypatch, tools_module, lambda req: _ok(rows))
+    out = _tool(mcp, "get_logs")(contains="chatterbox")
+    assert len(out) == 1
+    assert out[0]["id"] == 1
+
+
+def test_get_diagnostics_calls_endpoint(tools_module, mcp, monkeypatch):
+    seen = {}
+    def handler(req):
+        seen["url"] = str(req.url)
+        return _ok({"engines": {}, "package_versions": {}, "verbose": False})
+    _patch_transport(monkeypatch, tools_module, handler)
+    out = _tool(mcp, "get_diagnostics")()
+    assert "/api/diagnostics" in seen["url"]
+    assert "engines" in out
+
+
+def test_load_model_calls_endpoint(tools_module, mcp, monkeypatch):
+    seen = {}
+    def handler(req):
+        seen["url"]    = str(req.url)
+        seen["method"] = req.method
+        return _ok({"engine": "xtts", "loaded": True, "status": "ok"})
+    _patch_transport(monkeypatch, tools_module, handler)
+    out = _tool(mcp, "load_model")(engine="xtts")
+    assert seen["method"] == "POST"
+    assert "/api/models/load/xtts" in seen["url"]
+    assert out["loaded"] is True
+
+
+def test_set_verbose_true_calls_endpoint(tools_module, mcp, monkeypatch):
+    seen = {}
+    def handler(req):
+        seen["url"] = str(req.url)
+        return _ok({"verbose": True})
+    _patch_transport(monkeypatch, tools_module, handler)
+    out = _tool(mcp, "set_verbose")(enabled=True)
+    assert "/api/verbose/true" in seen["url"]
+    assert out["verbose"] is True
+
+
+def test_set_verbose_false_calls_endpoint(tools_module, mcp, monkeypatch):
+    seen = {}
+    def handler(req):
+        seen["url"] = str(req.url)
+        return _ok({"verbose": False})
+    _patch_transport(monkeypatch, tools_module, handler)
+    _tool(mcp, "set_verbose")(enabled=False)
+    assert "/api/verbose/false" in seen["url"]
