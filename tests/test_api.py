@@ -492,3 +492,128 @@ def test_piper_available_filter_by_language(client, monkeypatch):
     assert r.status_code == 200
     codes = {v["language_code"] for v in r.json()}
     assert codes == {"es_ES"}
+
+
+# ── /api/status — nuevos campos de motores ────────────────────────────────────
+
+def test_status_includes_new_engine_fields(client):
+    r = client.get("/api/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert "f5tts_available" in data
+    assert "f5tts_status" in data
+    assert "chatterbox_available" in data
+    assert "chatterbox_status" in data
+    assert "voices_f5tts" in data
+    assert "voices_chatterbox" in data
+
+
+# ── F5-TTS voices CRUD ────────────────────────────────────────────────────────
+
+def test_post_f5tts_voice(client):
+    r = client.post(
+        "/api/voices/f5tts",
+        data={"name": "VozF5"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["engine"] == "f5tts"
+    assert data["name"] == "VozF5"
+
+
+def test_post_f5tts_voice_invalid_ext(client):
+    r = client.post(
+        "/api/voices/f5tts",
+        data={"name": "Mala"},
+        files={"file": ("audio.mp3", b"fake", "audio/mpeg")},
+    )
+    assert r.status_code == 400
+
+
+def test_list_f5tts_voices(client):
+    client.post(
+        "/api/voices/f5tts",
+        data={"name": "F5Lista"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    )
+    r = client.get("/api/voices?engine=f5tts")
+    assert r.status_code == 200
+    names = [v["name"] for v in r.json()]
+    assert "F5Lista" in names
+
+
+def test_delete_f5tts_voice(client):
+    vid = client.post(
+        "/api/voices/f5tts",
+        data={"name": "F5Borrar"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    ).json()["id"]
+    assert client.delete(f"/api/voices/{vid}").status_code == 200
+    assert client.get(f"/api/voices/{vid}").status_code == 404
+
+
+# ── Chatterbox voices CRUD ────────────────────────────────────────────────────
+
+def test_post_chatterbox_voice(client):
+    r = client.post(
+        "/api/voices/chatterbox",
+        data={"name": "VozCB"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["engine"] == "chatterbox"
+    assert data["name"] == "VozCB"
+
+
+def test_post_chatterbox_voice_invalid_ext(client):
+    r = client.post(
+        "/api/voices/chatterbox",
+        data={"name": "Mala"},
+        files={"file": ("audio.mp3", b"fake", "audio/mpeg")},
+    )
+    assert r.status_code == 400
+
+
+def test_list_chatterbox_voices(client):
+    client.post(
+        "/api/voices/chatterbox",
+        data={"name": "CBLista"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    )
+    r = client.get("/api/voices?engine=chatterbox")
+    assert r.status_code == 200
+    names = [v["name"] for v in r.json()]
+    assert "CBLista" in names
+
+
+def test_delete_chatterbox_voice(client):
+    vid = client.post(
+        "/api/voices/chatterbox",
+        data={"name": "CBBorrar"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    ).json()["id"]
+    assert client.delete(f"/api/voices/{vid}").status_code == 200
+    assert client.get(f"/api/voices/{vid}").status_code == 404
+
+
+# ── /api/models/load ─────────────────────────────────────────────────────────
+
+def test_load_model_unknown_engine(client):
+    r = client.post("/api/models/load/unknown")
+    assert r.status_code == 400
+
+
+def test_load_model_f5tts_not_installed(client, monkeypatch):
+    import server
+    monkeypatch.setattr(server, "F5TTS_AVAILABLE", False)
+    r = client.post("/api/models/load/f5tts")
+    assert r.status_code == 503
+
+
+def test_load_model_chatterbox_not_installed(client, monkeypatch):
+    import server
+    monkeypatch.setattr(server, "CHATTERBOX_AVAILABLE", False)
+    r = client.post("/api/models/load/chatterbox")
+    assert r.status_code == 503

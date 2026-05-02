@@ -1091,6 +1091,26 @@ async def api_status():
     }
 
 
+@app.post("/api/models/load/{engine}")
+async def api_load_model(engine: str):
+    """Carga bajo demanda el modelo TTS del motor indicado.
+    Útil para precalentar desde la UI antes de la primera síntesis."""
+    if engine == "xtts":
+        m, st = await asyncio.to_thread(_load_tts_model)
+        return {"engine": "xtts", "status": st, "loaded": m is not None}
+    if engine == "f5tts":
+        if not F5TTS_AVAILABLE:
+            raise HTTPException(503, "f5-tts no instalado")
+        m, st = await asyncio.to_thread(_load_f5tts_model)
+        return {"engine": "f5tts", "status": st, "loaded": m is not None}
+    if engine == "chatterbox":
+        if not CHATTERBOX_AVAILABLE:
+            raise HTTPException(503, "chatterbox-tts no instalado")
+        m, st = await asyncio.to_thread(_load_chatterbox_model)
+        return {"engine": "chatterbox", "status": st, "loaded": m is not None}
+    raise HTTPException(400, f"Motor desconocido: {engine}")
+
+
 @app.get("/api/config")
 async def api_get_config():
     return load_config()
@@ -1109,13 +1129,9 @@ async def api_list_voices(engine: str = None):
     return list_voices(engine=engine)
 
 
-@app.get("/api/voices/{voice_id}")
-async def api_get_voice(voice_id: int):
-    v = get_voice(voice_id)
-    if not v:
-        raise HTTPException(404, "Voz no encontrada")
-    return v
-
+# ── Rutas específicas de motor ANTES del parámetro genérico {voice_id} ────────
+# FastAPI resuelve en orden de definición: las rutas literales deben ir primero
+# para que "f5tts"/"chatterbox" no sean tratadas como un voice_id entero.
 
 @app.post("/api/voices/xtts")
 async def api_upload_xtts_voice(file: UploadFile = File(...), name: str = Form(...)):
@@ -1130,6 +1146,16 @@ async def api_upload_xtts_voice(file: UploadFile = File(...), name: str = Form(.
         shutil.copyfileobj(file.file, out)
     voice_id = add_voice("xtts", safe, filename)
     return get_voice(voice_id)
+
+
+# ── Rutas genéricas con {voice_id} ────────────────────────────────────────────
+
+@app.get("/api/voices/{voice_id}")
+async def api_get_voice(voice_id: int):
+    v = get_voice(voice_id)
+    if not v:
+        raise HTTPException(404, "Voz no encontrada")
+    return v
 
 
 @app.put("/api/voices/{voice_id}")
@@ -1148,7 +1174,7 @@ async def api_delete_voice(voice_id: int):
     voice = get_voice(voice_id)
     if not voice:
         raise HTTPException(404, "Voz no encontrada")
-    if voice["engine"] == "xtts" and voice["filename"]:
+    if voice["engine"] in ("xtts", "f5tts", "chatterbox") and voice["filename"]:
         wav = VOICES_DIR / voice["filename"]
         if wav.exists():
             wav.unlink()
@@ -1204,11 +1230,8 @@ async def api_delete_piper_voice(voice_id: int):
 
 
 # ── F5-TTS: registro de voces ─────────────────────────────────────────────────
-
-@app.get("/api/voices/f5tts")
-async def api_list_f5tts_voices():
-    return list_voices(engine="f5tts")
-
+# GET /api/voices?engine=f5tts  →  usa el endpoint genérico de arriba
+# DELETE /api/voices/{id}       →  usa el endpoint genérico de arriba
 
 @app.post("/api/voices/f5tts")
 async def api_upload_f5tts_voice(file: UploadFile = File(...), name: str = Form(...)):
@@ -1225,25 +1248,9 @@ async def api_upload_f5tts_voice(file: UploadFile = File(...), name: str = Form(
     return get_voice(voice_id)
 
 
-@app.delete("/api/voices/f5tts/{voice_id}")
-async def api_delete_f5tts_voice(voice_id: int):
-    voice = get_voice(voice_id)
-    if not voice or voice["engine"] != "f5tts":
-        raise HTTPException(404, "Voz F5-TTS no encontrada")
-    if voice.get("filename"):
-        wav = VOICES_DIR / voice["filename"]
-        if wav.exists():
-            wav.unlink()
-    remove_voice(voice_id)
-    return {"status": "deleted"}
-
-
 # ── Chatterbox: registro de voces ─────────────────────────────────────────────
-
-@app.get("/api/voices/chatterbox")
-async def api_list_chatterbox_voices():
-    return list_voices(engine="chatterbox")
-
+# GET /api/voices?engine=chatterbox  →  usa el endpoint genérico de arriba
+# DELETE /api/voices/{id}            →  usa el endpoint genérico de arriba
 
 @app.post("/api/voices/chatterbox")
 async def api_upload_chatterbox_voice(file: UploadFile = File(...), name: str = Form(...)):
@@ -1258,19 +1265,6 @@ async def api_upload_chatterbox_voice(file: UploadFile = File(...), name: str = 
         shutil.copyfileobj(file.file, out)
     voice_id = add_voice("chatterbox", safe, filename)
     return get_voice(voice_id)
-
-
-@app.delete("/api/voices/chatterbox/{voice_id}")
-async def api_delete_chatterbox_voice(voice_id: int):
-    voice = get_voice(voice_id)
-    if not voice or voice["engine"] != "chatterbox":
-        raise HTTPException(404, "Voz Chatterbox no encontrada")
-    if voice.get("filename"):
-        wav = VOICES_DIR / voice["filename"]
-        if wav.exists():
-            wav.unlink()
-    remove_voice(voice_id)
-    return {"status": "deleted"}
 
 
 # ── Piper: catálogo HuggingFace ───────────────────────────────────────────────

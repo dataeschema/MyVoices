@@ -323,10 +323,10 @@ details[open] summary::before { transform: rotate(90deg); }
 
 <!-- ── Status bar ─────────────────────────────────────────────────────────── -->
 <div id="status-bar">
-  <div id="st-xtts" class="status-pill"><span class="dot dot-warn"></span>XTTSv2: cargando…</div>
+  <div id="st-xtts" class="status-pill" style="cursor:pointer" title="Click para cargar XTTSv2" onclick="loadModel('xtts')"><span class="dot dot-warn"></span>XTTSv2: cargando…</div>
   <div id="st-piper" class="status-pill"><span class="dot dot-warn"></span>Piper: —</div>
-  <div id="st-f5tts" class="status-pill"><span class="dot dot-warn"></span>F5-TTS: —</div>
-  <div id="st-chatterbox" class="status-pill"><span class="dot dot-warn"></span>Chatterbox: —</div>
+  <div id="st-f5tts" class="status-pill" style="cursor:pointer" title="Click para cargar F5-TTS" onclick="loadModel('f5tts')"><span class="dot dot-warn"></span>F5-TTS: —</div>
+  <div id="st-chatterbox" class="status-pill" style="cursor:pointer" title="Click para cargar Chatterbox" onclick="loadModel('chatterbox')"><span class="dot dot-warn"></span>Chatterbox: —</div>
   <div id="st-voices" class="status-pill" style="color:var(--text)">Voces: —</div>
   <div id="st-presets" class="status-pill" style="color:var(--text)">Presets: —</div>
   <div id="st-mcp" class="status-pill" style="cursor:pointer" title="Click para activar/desactivar el servidor MCP"
@@ -1049,30 +1049,50 @@ function escAttr(s) {
 async function loadStatus() {
   try {
     const r = await fetch('/api/status').then(r => r.json());
-    const xttsEl = document.getElementById('st-xtts');
-    const dot = r.model === 'ok'
-      ? `<span class="dot dot-ok"></span>XTTSv2: ${r.device.toUpperCase()}${r.gpu_name ? ' · ' + r.gpu_name : ''}`
-      : `<span class="dot dot-err"></span>XTTSv2: Error`;
-    xttsEl.innerHTML = dot;
 
     const piperEl = document.getElementById('st-piper');
     piperEl.innerHTML = r.piper_available
       ? `<span class="dot dot-ok"></span>Piper: OK`
       : `<span class="dot dot-warn"></span>Piper: no disponible`;
 
+    const xttsEl = document.getElementById('st-xtts');
+    if (r.model === 'ok') {
+      xttsEl.innerHTML = `<span class="dot dot-ok"></span>XTTSv2: ${r.device.toUpperCase()}${r.gpu_name ? ' · ' + r.gpu_name : ''}`;
+      xttsEl.title = 'Modelo cargado';
+    } else {
+      xttsEl.innerHTML = `<span class="dot dot-err"></span>XTTSv2: Error`;
+      xttsEl.title = 'Click para reintentar carga';
+    }
+
     const f5El = document.getElementById('st-f5tts');
-    if (f5El) f5El.innerHTML = r.f5tts_available
-      ? (r.f5tts_status === 'ok'
-          ? `<span class="dot dot-ok"></span>F5-TTS: listo`
-          : `<span class="dot dot-warn"></span>F5-TTS: disponible`)
-      : `<span class="dot dot-warn"></span>F5-TTS: no instalado`;
+    if (f5El) {
+      if (!r.f5tts_available) {
+        f5El.innerHTML = `<span class="dot dot-warn"></span>F5-TTS: no instalado`;
+        f5El.title = 'pip install "f5-tts>=1.1.20"';
+        f5El.style.cursor = 'default';
+      } else if (r.f5tts_status === 'ok') {
+        f5El.innerHTML = `<span class="dot dot-ok"></span>F5-TTS: listo`;
+        f5El.title = 'Modelo cargado';
+      } else {
+        f5El.innerHTML = `<span class="dot dot-warn"></span>F5-TTS: click para cargar`;
+        f5El.title = 'Click para cargar el modelo (primera vez ~3 GB)';
+      }
+    }
 
     const cbEl = document.getElementById('st-chatterbox');
-    if (cbEl) cbEl.innerHTML = r.chatterbox_available
-      ? (r.chatterbox_status === 'ok'
-          ? `<span class="dot dot-ok"></span>Chatterbox: listo`
-          : `<span class="dot dot-warn"></span>Chatterbox: disponible`)
-      : `<span class="dot dot-warn"></span>Chatterbox: no instalado`;
+    if (cbEl) {
+      if (!r.chatterbox_available) {
+        cbEl.innerHTML = `<span class="dot dot-warn"></span>Chatterbox: no instalado`;
+        cbEl.title = 'pip install chatterbox-tts --no-deps';
+        cbEl.style.cursor = 'default';
+      } else if (r.chatterbox_status === 'ok') {
+        cbEl.innerHTML = `<span class="dot dot-ok"></span>Chatterbox: listo`;
+        cbEl.title = 'Modelo cargado';
+      } else {
+        cbEl.innerHTML = `<span class="dot dot-warn"></span>Chatterbox: click para cargar`;
+        cbEl.title = 'Click para cargar el modelo';
+      }
+    }
 
     document.getElementById('st-voices').innerHTML =
       `🎙 Voces: ${r.voices_xtts} XTTS · ${r.voices_piper} Piper · ${r.voices_f5tts||0} F5 · ${r.voices_chatterbox||0} CB`;
@@ -1090,6 +1110,25 @@ async function loadStatus() {
 // mcpToggle.checked, que NO cambia al pulsar la pill — el resultado
 // era que clic-en-pill-OFF re-enviaba {enabled:false} y nunca activaba.
 let _mcpEnabled = false;
+
+async function loadModel(engine) {
+  const el = document.getElementById(`st-${engine === 'xtts' ? 'xtts' : engine}`);
+  const orig = el.innerHTML;
+  el.innerHTML = `<span class="dot dot-warn"></span>${engine === 'xtts' ? 'XTTSv2' : engine === 'f5tts' ? 'F5-TTS' : 'Chatterbox'}: cargando…`;
+  el.style.cursor = 'wait';
+  try {
+    const r = await fetch(`/api/models/load/${engine}`, { method: 'POST' }).then(r => r.json());
+    if (r.loaded) {
+      showToast(`${engine} cargado correctamente`, 'success');
+    } else {
+      showToast(`Error cargando ${engine}: ${r.status}`, 'error');
+    }
+  } catch(e) {
+    showToast(`Error conectando con el servidor`, 'error');
+  }
+  el.style.cursor = 'pointer';
+  await loadStatus();
+}
 
 async function loadMcpStatus() {
   try {
@@ -1889,7 +1928,7 @@ async function uploadF5ttsVoice() {
 }
 
 async function loadF5ttsVoices() {
-  const voices = await fetch('/api/voices/f5tts').then(r => r.json());
+  const voices = await fetch('/api/voices?engine=f5tts').then(r => r.json());
   const tbody  = document.getElementById('f5ttsVoicesBody');
   if (!voices.length) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay voces F5-TTS todavía</td></tr>';
@@ -1955,7 +1994,7 @@ async function uploadChatterboxVoice() {
 }
 
 async function loadChatterboxVoices() {
-  const voices = await fetch('/api/voices/chatterbox').then(r => r.json());
+  const voices = await fetch('/api/voices?engine=chatterbox').then(r => r.json());
   const tbody  = document.getElementById('chatterboxVoicesBody');
   if (!voices.length) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty">No hay voces Chatterbox todavía</td></tr>';
@@ -1978,7 +2017,7 @@ async function loadChatterboxVoices() {
 
 async function deleteVoiceEngine(id, engine) {
   if (!confirm('¿Eliminar esta voz? Los presets que la usen también se eliminarán.')) return;
-  const res = await fetch(`/api/voices/${engine}/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/voices/${id}`, { method: 'DELETE' });
   if (res.ok) {
     showToast('Voz eliminada', 'info');
     await loadVoices(); await loadPresets(); await loadStatus();
