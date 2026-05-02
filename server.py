@@ -940,8 +940,10 @@ async def _synth_f5tts(text: str, wav_filename: str, speed: float,
             tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             path = tmp.name; tmp.close()
             try:
+                # F5TTS.infer() devuelve (wav, sr, spec); con file_wave=path
+                # también persiste el WAV a disco.
                 model.infer(ref_file=str(ref_wav), ref_text="",
-                            gen_text=chunk, output_file=path)
+                            gen_text=chunk, file_wave=path)
                 if radio:                     apply_radio_effect(path)
                 if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
                 if abs(pitch) >= 0.1:         apply_pitch(path, pitch)
@@ -1065,7 +1067,7 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
             tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             path = tmp.name; tmp.close()
             model.infer(ref_file=str(ref_wav), ref_text="",
-                        gen_text=chunk, output_file=path)
+                        gen_text=chunk, file_wave=path)
             if radio:                     apply_radio_effect(path)
             if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
             if abs(pitch) >= 0.1:         apply_pitch(path, pitch)
