@@ -703,6 +703,39 @@ def test_speak_last_invalid_format(client):
         server._last_speak_path = None
 
 
+def test_wandb_stub_when_frozen(monkeypatch):
+    """El stub de wandb (solo activo en sys.frozen=True) debe registrar
+    los módulos con __spec__ válido para que importlib.util.find_spec()
+    no lance ValueError. Esto rompía la cadena de imports de transformers
+    cuando accelerate llamaba is_wandb_available() en el bundle."""
+    import importlib.util as ilu
+    import sys
+
+    import server
+
+    # Simular contexto frozen y limpiar sys.modules de cualquier wandb
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    for name in (
+        "wandb", "wandb_gql", "wandb_gql.client",
+        "wandb_graphql", "wandb_graphql.language",
+        "wandb_graphql.language.ast",
+    ):
+        sys.modules.pop(name, None)
+
+    server._mock_wandb_when_frozen()
+
+    # find_spec debe funcionar sin levantar ValueError
+    spec = ilu.find_spec("wandb")
+    assert spec is not None
+    assert spec.name == "wandb"
+
+    # import también debe funcionar y atributos arbitrarios devolver callables
+    import wandb
+    assert wandb.__spec__ is not None
+    assert callable(wandb.init)  # type: ignore[attr-defined]
+    assert callable(wandb.log)   # type: ignore[attr-defined]
+
+
 def test_speak_last_wav_passthrough(client):
     """Pedir wav devuelve el archivo cacheado."""
     import os

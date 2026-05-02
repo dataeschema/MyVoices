@@ -54,19 +54,20 @@ def _mock_wandb_when_frozen():
     'from wandb_gql import ...' fallan con ModuleNotFoundError.
 
     F5-TTS importa wandb transitivamente vía f5_tts.model.trainer pero no lo
-    usamos (no entrenamos). Stub no-op resuelve los imports sin bundlear wandb.
+    usamos (no entrenamos). Además accelerate llama importlib.util.find_spec
+    sobre wandb, que requiere __spec__ correctamente seteado — si es None
+    levanta 'ValueError: wandb.__spec__ is None' y rompe TODA la cadena de
+    imports de transformers.
+
+    Stub no-op con __spec__ válido resuelve todo sin bundlear wandb.
     En dev no hacemos nada: wandb real funciona."""
     if not getattr(sys, "frozen", False):
         return
 
-    class _Stub(types.ModuleType):
-        def __init__(self, name):
-            super().__init__(name)
-            self.__dict__["__path__"] = []
-            self.__dict__["__file__"] = None
+    import importlib.util as _ilu
 
-        def __getattr__(self, name):
-            # Cualquier atributo es un callable + clase usable
+    class _Stub(types.ModuleType):
+        def __getattr__(self, _name):
             class _AnyClass:
                 def __init__(self, *args, **kwargs): pass
                 def __call__(self, *args, **kwargs): return self
@@ -81,7 +82,14 @@ def _mock_wandb_when_frozen():
         "wandb_graphql.language",
         "wandb_graphql.language.ast",
     ):
-        sys.modules[name] = _Stub(name)
+        m = _Stub(name)
+        # __spec__ válido para que importlib.util.find_spec(name) no lance
+        # ValueError. accelerate lo usa para is_wandb_available().
+        m.__spec__ = _ilu.spec_from_loader(name, loader=None)
+        m.__path__ = []
+        m.__file__ = None
+        m.__version__ = "0.0.0-stub"
+        sys.modules[name] = m
 
 _mock_wandb_when_frozen()
 
