@@ -1,5 +1,6 @@
 import io
 import wave
+from pathlib import Path
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -551,6 +552,60 @@ def test_delete_f5tts_voice(client):
     ).json()["id"]
     assert client.delete(f"/api/voices/{vid}").status_code == 200
     assert client.get(f"/api/voices/{vid}").status_code == 404
+
+
+def test_delete_f5tts_voice_cleans_sidecars(client, tmp_path, monkeypatch):
+    """DELETE /api/voices/{id} debe borrar también los .lang.txt sidecars."""
+    import server
+    monkeypatch.setattr(server, "VOICES_DIR", tmp_path)
+
+    vid = client.post(
+        "/api/voices/f5tts",
+        data={"name": "F5Sidecar"},
+        files={"file": ("ref.wav", _dummy_wav_bytes(), "audio/wav")},
+    ).json()["id"]
+
+    # Simular que _get_f5_ref_text creó un sidecar
+    voice_data = client.get(f"/api/voices/{vid}").json()
+    wav_stem = Path(voice_data["filename"]).stem
+    sidecar = tmp_path / f"{wav_stem}.es.txt"
+    sidecar.write_text("Hola mundo")
+
+    client.delete(f"/api/voices/{vid}")
+    assert not sidecar.exists(), "El sidecar .es.txt no fue eliminado"
+
+
+def test_get_f5_ref_text_uses_cache(tmp_path):
+    """_get_f5_ref_text devuelve el contenido del sidecar si ya existe."""
+    import server
+    wav = tmp_path / "voice.wav"
+    wav.write_bytes(_dummy_wav_bytes())
+    sidecar = tmp_path / "voice.es.txt"
+    sidecar.write_text("texto cacheado", encoding="utf-8")
+
+    result = server._get_f5_ref_text(wav, "es")
+    assert result == "texto cacheado"
+
+
+def test_get_f5_ref_text_fallback_on_error(tmp_path, monkeypatch):
+    """Si la transcripción falla, _get_f5_ref_text devuelve '' sin lanzar."""
+    import sys
+
+    import server
+
+    wav = tmp_path / "voice.wav"
+    wav.write_bytes(_dummy_wav_bytes())
+
+    # Forzar fallo: inyectar un módulo stub cuya `transcribe` lanza
+    class _FakeUtils:
+        @staticmethod
+        def transcribe(*a, **kw):
+            raise RuntimeError("whisper no disponible")
+
+    monkeypatch.setitem(sys.modules, "f5_tts.infer.utils_infer", _FakeUtils())
+
+    result = server._get_f5_ref_text(wav, "es")
+    assert result == ""
 
 
 # ── Chatterbox voices CRUD ────────────────────────────────────────────────────

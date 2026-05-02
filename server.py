@@ -603,27 +603,31 @@ else:
     tts, model_status = _load_tts_model()
 
 # ── F5-TTS (lazy) ─────────────────────────────────────────────────────────────
-# F5-TTS no acepta un parámetro de idioma en infer(); el idioma del output se
-# infiere del ref_text. Si pasamos ref_text="" usa Whisper para auto-transcribir
-# y suele detectar inglés en muestras cortas. Pasamos un ref_text fijo en el
-# idioma deseado para forzar a F5 a sintetizar en ese mismo idioma.
-_F5_REF_TEXT_BY_LANG = {
-    "es": "Hola, esto es una prueba de voz en español.",
-    "en": "Hello, this is a voice test in English.",
-    "fr": "Bonjour, ceci est un test de voix en français.",
-    "de": "Hallo, dies ist ein Sprachtest auf Deutsch.",
-    "it": "Ciao, questo è un test vocale in italiano.",
-    "pt": "Olá, este é um teste de voz em português.",
-    "pl": "Cześć, to jest test głosu w języku polskim.",
-    "tr": "Merhaba, bu Türkçe bir ses testidir.",
-    "ru": "Привет, это голосовой тест на русском языке.",
-    "nl": "Hallo, dit is een spraaktest in het Nederlands.",
-    "cs": "Ahoj, toto je hlasový test v češtině.",
-    "ar": "مرحبا، هذا اختبار صوتي باللغة العربية.",
-    "zh": "你好，这是一段中文语音测试。",
-    "ja": "こんにちは、これは日本語の音声テストです。",
-    "ko": "안녕하세요, 이것은 한국어 음성 테스트입니다.",
-}
+
+
+def _get_f5_ref_text(ref_wav_path: Path, language: str) -> str:
+    """Return the transcript of *ref_wav_path* with a language hint for Whisper.
+
+    Result is cached to a sidecar ``<wav>.<lang>.txt`` file so subsequent calls
+    are instant.  Falls back to ``""`` on any failure — F5-TTS will then
+    auto-transcribe without a language hint (same as the original behaviour).
+    """
+    cache_path = ref_wav_path.with_suffix(f".{language}.txt")
+    if cache_path.exists():
+        try:
+            return cache_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+    try:
+        from f5_tts.infer.utils_infer import transcribe as _f5_transcribe  # noqa: PLC0415
+        text = _f5_transcribe(str(ref_wav_path), language=language)
+        text = (text or "").strip()
+        cache_path.write_text(text, encoding="utf-8")
+        _log.info(f"[F5-TTS] ref_text cacheado ({language}): {text!r}")
+        return text
+    except Exception as exc:
+        _log.warning(f"[F5-TTS] No se pudo transcribir WAV de referencia: {exc} — usando ref_text=''")
+        return ""
 
 _f5tts_model:   "F5TTS | None"        = None
 _f5tts_status:  str                   = "not_loaded"
@@ -951,7 +955,7 @@ async def _synth_f5tts(text: str, wav_filename: str, speed: float,
     ref_wav = VOICES_DIR / wav_filename
     if not ref_wav.exists():
         raise HTTPException(400, f"Archivo de voz '{wav_filename}' no encontrado")
-    ref_text = _F5_REF_TEXT_BY_LANG.get(language, _F5_REF_TEXT_BY_LANG["en"])
+    ref_text = _get_f5_ref_text(ref_wav, language)
 
     chunks  = split_into_chunks(text)
     audio_q: queue.Queue = queue.Queue()
@@ -963,9 +967,6 @@ async def _synth_f5tts(text: str, wav_filename: str, speed: float,
             tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             path = tmp.name; tmp.close()
             try:
-                # F5TTS.infer() devuelve (wav, sr, spec); con file_wave=path
-                # también persiste el WAV a disco. ref_text fija el idioma del
-                # output (F5 no acepta language= directamente).
                 model.infer(ref_file=str(ref_wav), ref_text=ref_text,
                             gen_text=chunk, file_wave=path)
                 if radio:                     apply_radio_effect(path)
@@ -1085,7 +1086,7 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
         ref_wav = VOICES_DIR / filename
         if not ref_wav.exists():
             raise ValueError(f"Archivo de voz '{filename}' no encontrado")
-        ref_text = _F5_REF_TEXT_BY_LANG.get(language, _F5_REF_TEXT_BY_LANG["en"])
+        ref_text = _get_f5_ref_text(ref_wav, language)
         for chunk in chunks:
             if not chunk.strip():
                 continue
@@ -1342,6 +1343,9 @@ async def api_delete_voice(voice_id: int):
         wav = VOICES_DIR / voice["filename"]
         if wav.exists():
             wav.unlink()
+        # remove F5-TTS transcript sidecars (<wav>.<lang>.txt)
+        for sidecar in VOICES_DIR.glob(f"{wav.stem}.*.txt"):
+            sidecar.unlink(missing_ok=True)
     remove_voice(voice_id)
     return {"status": "deleted"}
 
