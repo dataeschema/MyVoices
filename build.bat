@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 REM ============================================================
 REM   MyVoices — Script de build automatico (idempotente)
 REM
@@ -188,15 +189,35 @@ tasklist /fi "imagename eq MyVoices.exe" 2>nul | find /i "MyVoices.exe" >nul
 if not errorlevel 1 (
     echo Cerrando MyVoices.exe en ejecucion...
     taskkill /f /im MyVoices.exe /t >nul 2>&1
-    timeout /t 2 /nobreak >nul
+    REM 5 s da margen al SO para liberar handles antes de borrar el bundle
+    timeout /t 5 /nobreak >nul
 )
 
 REM ── 10. Limpiar builds anteriores ────────────────────────────────────────────
+REM Si el rmdir falla (Defender bloqueando un fichero, lock residual...),
+REM renombramos el dir al lateral con timestamp y dejamos que el siguiente
+REM build / un cleanup manual lo borre. PyInstaller solo necesita que la ruta
+REM destino este libre para crear la suya.
 if exist "dist\MyVoices" (
     echo Limpiando dist\MyVoices...
-    rmdir /s /q "dist\MyVoices"
+    rmdir /s /q "dist\MyVoices" 2>nul
+    if exist "dist\MyVoices" (
+        for /f "tokens=*" %%t in ('powershell -nop -c "Get-Date -Format yyyyMMddHHmmss"') do set "_TS=%%t"
+        echo [WARN] No se pudo borrar dist\MyVoices ^(fichero bloqueado por antivirus o handle residual^)
+        echo        Renombrando a dist\.trash_!_TS! y continuando...
+        ren "dist\MyVoices" ".trash_!_TS!" >nul 2>&1
+        if exist "dist\MyVoices" (
+            echo [ERROR] Tampoco se puede renombrar. Comprueba:
+            echo         1^) Que MyVoices.exe no este corriendo
+            echo         2^) Que Windows Defender no este escaneando dist\
+            echo            ^(añade exclusion para %CD%\dist^)
+            echo         3^) Que ninguna ventana de Explorer tenga dist\MyVoices abierto
+            if "%CI_MODE%"=="0" pause
+            exit /b 1
+        )
+    )
 )
-if exist "build" rmdir /s /q "build"
+if exist "build" rmdir /s /q "build" 2>nul
 echo.
 
 REM ── 11. Compilar con PyInstaller (--clean para evitar caches stale) ─────────

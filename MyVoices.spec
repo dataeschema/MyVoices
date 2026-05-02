@@ -11,16 +11,33 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 block_cipher = None
 
-def safe_collect(pkg, **kwargs):
-    """collect_data_files ignorando paquetes no instalados."""
+def safe_collect(pkg, exclude_patterns=None, **kwargs):
+    """collect_data_files ignorando paquetes no instalados.
+    `exclude_patterns`: lista de subcadenas; si alguna aparece en la ruta
+    del fichero recolectado, lo descartamos (vía path-separator-agnostic)."""
     try:
-        return collect_data_files(pkg, **kwargs)
+        items = collect_data_files(pkg, **kwargs)
     except Exception:
         return []
+    if exclude_patterns:
+        norm = lambda p: p.replace("\\", "/").lower()
+        return [
+            (src, dst) for (src, dst) in items
+            if not any(pat.lower() in norm(src) for pat in exclude_patterns)
+        ]
+    return items
 
 # Paquetes que necesitan sus .py disponibles en tiempo de ejecución
-# (torch.jit.script e inspect.getsource los leen desde disco)
-tts_datas       = safe_collect("TTS",       include_py_files=True)
+# (torch.jit.script e inspect.getsource los leen desde disco).
+# Excluímos demos/, notebooks/, recipes/ y server/ — son código de
+# fine-tuning/ejemplos que no usamos en inferencia y disparan falsos
+# positivos del antivirus por nombres como "gpt_train.py".
+tts_datas       = safe_collect(
+    "TTS",
+    exclude_patterns=["/TTS/demos/", "/TTS/notebooks/",
+                      "/TTS/recipes/", "/TTS/server/"],
+    include_py_files=True,
+)
 trainer_datas   = safe_collect("trainer",   include_py_files=True)
 typeguard_datas = safe_collect("typeguard", include_py_files=True)
 inflect_datas   = safe_collect("inflect",   include_py_files=True)
