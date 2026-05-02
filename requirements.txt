@@ -18,9 +18,11 @@ pydantic==2.12.5
 
 # ── TTS / Audio ───────────────────────────────────────────────────────────────
 TTS==0.22.0
-# transformers: TTS 0.22.0 requiere >=4.33. En instalaciones locales con Chatterbox
-# se sube a 5.x; el shim en server.py parchea BeamSearchScorer removido en 5.x.
-transformers>=4.33
+# transformers 4.46.x es el punto dulce:
+#   - TTS 0.22.0 necesita BeamSearchScorer + GPT2PreTrainedModel (eliminados en 5.x)
+#   - Chatterbox necesita MinPLogitsWarper (añadido en 4.43+)
+#   - F5-TTS es compatible con 4.x
+transformers==4.46.3
 pygame==2.6.1
 piper-tts>=1.4.0           # Motor TTS ligero (ONNX, sin GPU requerida)
 

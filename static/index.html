@@ -1112,16 +1112,23 @@ async function loadStatus() {
 let _mcpEnabled = false;
 
 async function loadModel(engine) {
-  const el = document.getElementById(`st-${engine === 'xtts' ? 'xtts' : engine}`);
-  const orig = el.innerHTML;
-  el.innerHTML = `<span class="dot dot-warn"></span>${engine === 'xtts' ? 'XTTSv2' : engine === 'f5tts' ? 'F5-TTS' : 'Chatterbox'}: cargando…`;
+  const labels = { xtts: 'XTTSv2', f5tts: 'F5-TTS', chatterbox: 'Chatterbox' };
+  const label  = labels[engine] || engine;
+  const elId   = engine === 'xtts' ? 'st-xtts' : `st-${engine}`;
+  const el     = document.getElementById(elId);
+  if (!el) return;
+  el.innerHTML   = `<span class="dot dot-warn"></span>${label}: cargando…`;
   el.style.cursor = 'wait';
+  showToast(`Cargando ${label}… puede tardar varios minutos`, 'info');
   try {
-    const r = await fetch(`/api/models/load/${engine}`, { method: 'POST' }).then(r => r.json());
-    if (r.loaded) {
-      showToast(`${engine} cargado correctamente`, 'success');
+    const resp = await fetch(`/api/models/load/${engine}`, { method: 'POST' });
+    const r    = await resp.json();
+    if (!resp.ok) {
+      showToast(`${label}: ${r.detail || r.status}`, 'error');
+    } else if (r.loaded) {
+      showToast(`${label} cargado correctamente`, 'success');
     } else {
-      showToast(`Error cargando ${engine}: ${r.status}`, 'error');
+      showToast(`Error cargando ${label}: ${r.status}`, 'error');
     }
   } catch(e) {
     showToast(`Error conectando con el servidor`, 'error');
