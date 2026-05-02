@@ -134,10 +134,10 @@ El WAV sintetizado se cachea en el servidor para que puedas obtener el audio exa
 GET http://localhost:8000/api/speak/last     → devuelve el último WAV
 ```
 
-### Descargar audio sintetizado como WAV (re-síntesis)
+### Descargar audio sintetizado (WAV / MP3 / OGG)
 
 ```
-POST http://localhost:8000/api/speak/download
+POST http://localhost:8000/api/speak/download?format=mp3
 Content-Type: application/json
 
 {
@@ -146,7 +146,14 @@ Content-Type: application/json
 }
 ```
 
-Devuelve el fichero WAV directamente (Content-Disposition: attachment).
+`format` admite `wav` (default), `mp3` o `ogg`. WAV es passthrough; MP3/OGG
+requieren `ffmpeg` en el PATH (mp3 a 192 kbps, ogg vía libvorbis).
+
+Para descargar el último audio reproducido sin re-sintetizar:
+
+```
+GET http://localhost:8000/api/speak/last?format=mp3
+```
 
 ### Reproducir una frase guardada
 

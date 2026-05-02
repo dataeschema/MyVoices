@@ -429,10 +429,15 @@ details[open] summary::before { transform: rotate(90deg); }
         <label>Texto</label>
         <textarea id="testText" rows="3" placeholder="Escribe el texto a reproducir…" oninput="clearSelectedPhrase()"></textarea>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-success" id="testBtn" onclick="testSpeak()">▶ Reproducir</button>
         <button class="btn btn-secondary" id="downloadBtn" onclick="testDownload()" disabled
                 title="Reproduce primero un texto para guardarlo">⬇ Descargar audio</button>
+        <select id="downloadFormat" style="width:auto" title="Formato de descarga">
+          <option value="wav">WAV</option>
+          <option value="mp3">MP3</option>
+          <option value="ogg">OGG</option>
+        </select>
       </div>
       <!-- Guardar frase desde el panel de prueba -->
       <div class="save-phrase-row">
@@ -821,8 +826,10 @@ details[open] summary::before { transform: rotate(90deg); }
           <div class="help-branch-num">3.2</div>
           <div class="help-branch-title">⬇ Guardar el audio</div>
           <div class="help-branch-text">
-            Tras reproducir, pulsa <b>Descargar audio</b> — guarda exactamente el WAV
-            que acabas de oír (no se vuelve a sintetizar).
+            Tras reproducir, pulsa <b>Descargar audio</b> — guarda exactamente
+            el audio que acabas de oír (no se re-sintetiza). Selecciona formato
+            <b>WAV</b>, <b>MP3</b> u <b>OGG</b> en el desplegable junto al botón
+            (MP3/OGG requieren <code>ffmpeg</code> en PATH).
           </div>
         </div>
 
@@ -1539,9 +1546,11 @@ async function testSpeak() {
 // que es el mismo audio que se acaba de reproducir.
 async function testDownload() {
   const btn = document.getElementById('downloadBtn');
+  const fmt = (document.getElementById('downloadFormat')?.value || 'wav').toLowerCase();
+  const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', ogg: 'audio/ogg' }[fmt] || 'audio/wav';
   btn.disabled = true; btn.textContent = '⌛ Descargando…';
   try {
-    const res = await fetch('/api/speak/last');
+    const res = await fetch(`/api/speak/last?format=${fmt}`);
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       showToast(e.detail || 'No hay audio para guardar', 'error');
@@ -1549,12 +1558,12 @@ async function testDownload() {
     }
     const blob     = await res.blob();
     const preset   = _lastPlayedPreset || 'audio';
-    const safeName = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.wav`;
+    const safeName = `myvoices_${preset.replace(/[^a-zA-Z0-9_]/g,'_')}.${fmt}`;
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
           suggestedName: safeName,
-          types: [{ description: 'Audio WAV', accept: { 'audio/wav': ['.wav'] } }],
+          types: [{ description: `Audio ${fmt.toUpperCase()}`, accept: { [mime]: [`.${fmt}`] } }],
         });
         const writable = await handle.createWritable();
         await writable.write(blob);

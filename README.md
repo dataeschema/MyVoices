@@ -134,10 +134,10 @@ The synthesized WAV is cached server-side so you can grab the exact audio that p
 GET http://localhost:8000/api/speak/last     → returns the last WAV
 ```
 
-### Download synthesized audio as WAV (re-synthesis)
+### Download synthesized audio (WAV / MP3 / OGG)
 
 ```
-POST http://localhost:8000/api/speak/download
+POST http://localhost:8000/api/speak/download?format=mp3
 Content-Type: application/json
 
 {
@@ -146,7 +146,14 @@ Content-Type: application/json
 }
 ```
 
-Returns the WAV file directly (Content-Disposition: attachment).
+`format` accepts `wav` (default), `mp3` or `ogg`. WAV is passthrough; MP3/OGG
+require `ffmpeg` on PATH (mp3 at 192 kbps, ogg via libvorbis).
+
+To download the last played audio without re-synthesis:
+
+```
+GET http://localhost:8000/api/speak/last?format=mp3
+```
 
 ### Play a saved phrase
 

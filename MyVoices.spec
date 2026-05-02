@@ -230,6 +230,7 @@ a = Analysis(
         # Chatterbox y dependencias (perth incluye watermark + checkpoint)
         "chatterbox",
         "chatterbox.tts",
+        "chatterbox.mtl_tts",
         "perth",
         "perth.perth_net",
         "perth.perth_net.perth_net_implicit",
@@ -240,7 +241,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["numba", "llvmlite"],
+    excludes=["numba", "llvmlite", "wandb", "wandb_gql", "wandb_graphql"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

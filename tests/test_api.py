@@ -660,3 +660,63 @@ def test_set_verbose_persists_in_config(client):
     client.post("/api/verbose/true")
     cfg = client.get("/api/config").json()
     assert cfg["verbose"] == "true"
+
+
+# ── Conversión de formato (mp3 / ogg / wav) ──────────────────────────────────
+
+def test_convert_audio_wav_passthrough(tmp_path):
+    """fmt='wav' debe devolver el mismo path sin tocar el WAV."""
+    import server
+    wav = tmp_path / "in.wav"
+    wav.write_bytes(_dummy_wav_bytes())
+    out = server._convert_audio(str(wav), "wav")
+    assert out == str(wav)
+
+
+def test_convert_audio_invalid_format_raises(tmp_path):
+    """Formato no soportado → ValueError."""
+    import pytest
+
+    import server
+    wav = tmp_path / "in.wav"
+    wav.write_bytes(_dummy_wav_bytes())
+    with pytest.raises(ValueError, match="no soportado"):
+        server._convert_audio(str(wav), "flac")
+
+
+def test_speak_last_invalid_format(client):
+    """Pedir un format no soportado debe responder 400."""
+    # Forzamos a que haya algo cacheado para que no sea 404
+    import tempfile
+
+    import server
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    tmp.write(_dummy_wav_bytes()); tmp.close()
+    server._last_speak_path = tmp.name
+    try:
+        r = client.get("/api/speak/last?format=flac")
+        assert r.status_code == 400
+        assert "no soportado" in r.json()["detail"].lower()
+    finally:
+        import os
+        os.remove(tmp.name)
+        server._last_speak_path = None
+
+
+def test_speak_last_wav_passthrough(client):
+    """Pedir wav devuelve el archivo cacheado."""
+    import os
+    import tempfile
+
+    import server
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    tmp.write(_dummy_wav_bytes()); tmp.close()
+    server._last_speak_path = tmp.name
+    try:
+        r = client.get("/api/speak/last?format=wav")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("audio/wav")
+    finally:
+        if os.path.exists(tmp.name):
+            os.remove(tmp.name)
+        server._last_speak_path = None

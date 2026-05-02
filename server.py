@@ -47,6 +47,45 @@ def _mock_numba_and_llvmlite():
 _mock_numba_and_llvmlite()
 
 
+def _mock_wandb_when_frozen():
+    """En el bundle PyInstaller, wandb tiene paquetes vendored (wandb_gql,
+    wandb_graphql) en wandb/vendor/ que su propio vendor_setup() añade a
+    sys.path en runtime. PyInstaller no replica ese mecanismo y los imports
+    'from wandb_gql import ...' fallan con ModuleNotFoundError.
+
+    F5-TTS importa wandb transitivamente vía f5_tts.model.trainer pero no lo
+    usamos (no entrenamos). Stub no-op resuelve los imports sin bundlear wandb.
+    En dev no hacemos nada: wandb real funciona."""
+    if not getattr(sys, "frozen", False):
+        return
+
+    class _Stub(types.ModuleType):
+        def __init__(self, name):
+            super().__init__(name)
+            self.__dict__["__path__"] = []
+            self.__dict__["__file__"] = None
+
+        def __getattr__(self, name):
+            # Cualquier atributo es un callable + clase usable
+            class _AnyClass:
+                def __init__(self, *args, **kwargs): pass
+                def __call__(self, *args, **kwargs): return self
+                def __getattr__(self, _n): return _AnyClass
+            return _AnyClass
+
+    for name in (
+        "wandb",
+        "wandb_gql",
+        "wandb_gql.client",
+        "wandb_graphql",
+        "wandb_graphql.language",
+        "wandb_graphql.language.ast",
+    ):
+        sys.modules[name] = _Stub(name)
+
+_mock_wandb_when_frozen()
+
+
 def _shim_transformers_beam_search():
     """BeamSearchScorer fue eliminado en transformers 5.x.
     TTS==0.22.0 lo importa en stream_generator.py pero solo lo usa en rutas de
@@ -227,7 +266,8 @@ except Exception as _e:
     _F5TTS_IMPORT_ERROR = f"{type(_e).__name__}: {_e}\n{_tb_f5.format_exc()}"
 
 try:
-    from chatterbox.tts import ChatterboxTTS
+    # Usamos la variante multilingüe; .generate() acepta language_id="es"|"en"|...
+    from chatterbox.mtl_tts import ChatterboxMultilingualTTS as ChatterboxTTS
     CHATTERBOX_AVAILABLE = True
 except Exception as _e:
     import traceback as _tb_cb
@@ -756,7 +796,7 @@ async def _speak_with_preset(preset_name: str, text: str) -> dict:
     elif engine == "f5tts":
         return await _synth_f5tts(text, filename, speed, pitch, radio)
     elif engine == "chatterbox":
-        return await _synth_chatterbox(text, filename, speed, pitch, radio)
+        return await _synth_chatterbox(text, filename, speed, pitch, radio, language)
     else:
         return await _synth_xtts(text, filename, speed, pitch, radio, language)
 
@@ -919,7 +959,7 @@ async def _synth_f5tts(text: str, wav_filename: str, speed: float,
 
 
 async def _synth_chatterbox(text: str, wav_filename: str, speed: float,
-                            pitch: float, radio: bool) -> dict:
+                            pitch: float, radio: bool, language: str = "es") -> dict:
     model, status = _load_chatterbox_model()
     if model is None:
         raise HTTPException(500, f"Chatterbox TTS no disponible: {status}")
@@ -939,7 +979,8 @@ async def _synth_chatterbox(text: str, wav_filename: str, speed: float,
             tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             path = tmp.name; tmp.close()
             try:
-                wav_tensor = model.generate(chunk, audio_prompt_path=str(ref_wav))
+                wav_tensor = model.generate(chunk, language_id=language,
+                                            audio_prompt_path=str(ref_wav))
                 audio_np = wav_tensor.squeeze().cpu().numpy()
                 scipy_wavfile.write(path, 24000,
                                     (audio_np * 32767).astype(np.int16))
@@ -1033,7 +1074,8 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
                 continue
             tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             path = tmp.name; tmp.close()
-            wav_tensor = model.generate(chunk, audio_prompt_path=str(ref_wav))
+            wav_tensor = model.generate(chunk, language_id=language,
+                                        audio_prompt_path=str(ref_wav))
             audio_np = wav_tensor.squeeze().cpu().numpy()
             scipy_wavfile.write(path, 24000, (audio_np * 32767).astype(np.int16))
             if radio:                     apply_radio_effect(path)
@@ -1605,33 +1647,103 @@ async def api_speak(req: SpeakRequest, request: Request):
     return result
 
 
+# ── Conversión de formato (mp3 / ogg / wav) ──────────────────────────────────
+_AUDIO_MIME = {
+    "wav": "audio/wav",
+    "mp3": "audio/mpeg",
+    "ogg": "audio/ogg",
+}
+
+
+def _convert_audio(wav_path: str, fmt: str) -> str:
+    """Convierte un WAV a `fmt` (wav/mp3/ogg) usando pydub + ffmpeg.
+    Devuelve la ruta del fichero convertido (NamedTemporaryFile).
+    Si fmt='wav' devuelve el WAV original sin tocar."""
+    fmt = fmt.lower().strip()
+    if fmt not in _AUDIO_MIME:
+        raise ValueError(f"Formato no soportado: {fmt!r}. Usa wav, mp3 u ogg.")
+    if fmt == "wav":
+        return wav_path
+    try:
+        from pydub import AudioSegment
+    except ImportError as exc:
+        raise RuntimeError(
+            "pydub no está instalado; mp3/ogg requieren `pip install pydub`"
+        ) from exc
+    audio = AudioSegment.from_wav(wav_path)
+    out = tempfile.NamedTemporaryFile(delete=False, suffix=f".{fmt}")
+    out_path = out.name; out.close()
+    export_kwargs = {}
+    if fmt == "mp3":
+        export_kwargs["bitrate"] = "192k"
+    elif fmt == "ogg":
+        export_kwargs["codec"] = "libvorbis"
+    try:
+        audio.export(out_path, format=fmt, **export_kwargs)
+    except Exception as exc:
+        try: os.remove(out_path)
+        except Exception: pass
+        raise RuntimeError(
+            f"No se pudo convertir a {fmt}: {exc}. Comprueba que ffmpeg esté "
+            f"instalado y disponible en PATH."
+        ) from exc
+    return out_path
+
+
 @app.get("/api/speak/last")
-async def api_speak_last():
-    """Devuelve el último audio sintetizado por /api/speak."""
+async def api_speak_last(format: str = "wav"):
+    """Devuelve el último audio sintetizado por /api/speak.
+    format=wav (default) | mp3 | ogg"""
     with _last_speak_lock:
         path = _last_speak_path
     if not path or not os.path.exists(path):
         raise HTTPException(404, "No hay audio reciente. Reproduce primero un texto.")
-    return FileResponse(path, media_type="audio/wav", filename="myvoices_last.wav")
+    try:
+        out_path = await asyncio.to_thread(_convert_audio, path, format)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc))
+    fmt = format.lower()
+    return FileResponse(
+        out_path,
+        media_type=_AUDIO_MIME[fmt],
+        filename=f"myvoices_last.{fmt}",
+        # Si convertimos, el archivo es nuevo y debe borrarse al terminar.
+        # Si fue passthrough (wav), no lo borramos (se reusa para próximas descargas).
+        background=BackgroundTask(os.remove, out_path) if out_path != path else None,
+    )
 
 
 @app.post("/api/speak/download")
-async def api_speak_download(req: SpeakRequest):
-    """Sintetiza texto con el preset y devuelve el WAV para descarga."""
+async def api_speak_download(req: SpeakRequest, format: str = "wav"):
+    """Sintetiza texto con el preset y devuelve el audio para descarga.
+    format=wav (default) | mp3 | ogg"""
     if not req.text.strip() or not req.voice.strip():
         raise HTTPException(400, "voice y text son obligatorios")
     try:
-        path = await asyncio.to_thread(
+        wav_path = await asyncio.to_thread(
             _synth_to_file_sync, req.voice.strip(), req.text.strip()
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+    try:
+        out_path = await asyncio.to_thread(_convert_audio, wav_path, format)
+    except (ValueError, RuntimeError) as exc:
+        try: os.remove(wav_path)
+        except Exception: pass
+        raise HTTPException(400, str(exc))
     safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", req.voice.strip())
+    fmt = format.lower()
+    # Si convertimos, hay 2 ficheros temporales que limpiar; si no, solo el WAV.
+    def _cleanup():
+        for p in (wav_path, out_path):
+            if p and os.path.exists(p):
+                try: os.remove(p)
+                except Exception: pass
     return FileResponse(
-        path,
-        media_type="audio/wav",
-        filename=f"myvoices_{safe_name}.wav",
-        background=BackgroundTask(os.remove, path),
+        out_path,
+        media_type=_AUDIO_MIME[fmt],
+        filename=f"myvoices_{safe_name}.{fmt}",
+        background=BackgroundTask(_cleanup),
     )
 
 
