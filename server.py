@@ -603,6 +603,28 @@ else:
     tts, model_status = _load_tts_model()
 
 # ── F5-TTS (lazy) ─────────────────────────────────────────────────────────────
+# F5-TTS no acepta un parámetro de idioma en infer(); el idioma del output se
+# infiere del ref_text. Si pasamos ref_text="" usa Whisper para auto-transcribir
+# y suele detectar inglés en muestras cortas. Pasamos un ref_text fijo en el
+# idioma deseado para forzar a F5 a sintetizar en ese mismo idioma.
+_F5_REF_TEXT_BY_LANG = {
+    "es": "Hola, esto es una prueba de voz en español.",
+    "en": "Hello, this is a voice test in English.",
+    "fr": "Bonjour, ceci est un test de voix en français.",
+    "de": "Hallo, dies ist ein Sprachtest auf Deutsch.",
+    "it": "Ciao, questo è un test vocale in italiano.",
+    "pt": "Olá, este é um teste de voz em português.",
+    "pl": "Cześć, to jest test głosu w języku polskim.",
+    "tr": "Merhaba, bu Türkçe bir ses testidir.",
+    "ru": "Привет, это голосовой тест на русском языке.",
+    "nl": "Hallo, dit is een spraaktest in het Nederlands.",
+    "cs": "Ahoj, toto je hlasový test v češtině.",
+    "ar": "مرحبا، هذا اختبار صوتي باللغة العربية.",
+    "zh": "你好，这是一段中文语音测试。",
+    "ja": "こんにちは、これは日本語の音声テストです。",
+    "ko": "안녕하세요, 이것은 한국어 음성 테스트입니다.",
+}
+
 _f5tts_model:   "F5TTS | None"        = None
 _f5tts_status:  str                   = "not_loaded"
 
@@ -802,7 +824,7 @@ async def _speak_with_preset(preset_name: str, text: str) -> dict:
     if engine == "piper":
         return await _synth_piper(text, filename, speaker_id, speed, pitch, radio)
     elif engine == "f5tts":
-        return await _synth_f5tts(text, filename, speed, pitch, radio)
+        return await _synth_f5tts(text, filename, speed, pitch, radio, language)
     elif engine == "chatterbox":
         return await _synth_chatterbox(text, filename, speed, pitch, radio, language)
     else:
@@ -920,7 +942,7 @@ async def _synth_xtts(text: str, wav_filename: str, speed: float,
 
 
 async def _synth_f5tts(text: str, wav_filename: str, speed: float,
-                       pitch: float, radio: bool) -> dict:
+                       pitch: float, radio: bool, language: str = "es") -> dict:
     model, status = _load_f5tts_model()
     if model is None:
         raise HTTPException(500, f"F5-TTS no disponible: {status}")
@@ -929,6 +951,7 @@ async def _synth_f5tts(text: str, wav_filename: str, speed: float,
     ref_wav = VOICES_DIR / wav_filename
     if not ref_wav.exists():
         raise HTTPException(400, f"Archivo de voz '{wav_filename}' no encontrado")
+    ref_text = _F5_REF_TEXT_BY_LANG.get(language, _F5_REF_TEXT_BY_LANG["en"])
 
     chunks  = split_into_chunks(text)
     audio_q: queue.Queue = queue.Queue()
@@ -941,8 +964,9 @@ async def _synth_f5tts(text: str, wav_filename: str, speed: float,
             path = tmp.name; tmp.close()
             try:
                 # F5TTS.infer() devuelve (wav, sr, spec); con file_wave=path
-                # también persiste el WAV a disco.
-                model.infer(ref_file=str(ref_wav), ref_text="",
+                # también persiste el WAV a disco. ref_text fija el idioma del
+                # output (F5 no acepta language= directamente).
+                model.infer(ref_file=str(ref_wav), ref_text=ref_text,
                             gen_text=chunk, file_wave=path)
                 if radio:                     apply_radio_effect(path)
                 if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)
@@ -1061,12 +1085,13 @@ def _synth_to_file_sync(preset_name: str, text: str) -> str:
         ref_wav = VOICES_DIR / filename
         if not ref_wav.exists():
             raise ValueError(f"Archivo de voz '{filename}' no encontrado")
+        ref_text = _F5_REF_TEXT_BY_LANG.get(language, _F5_REF_TEXT_BY_LANG["en"])
         for chunk in chunks:
             if not chunk.strip():
                 continue
             tmp  = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
             path = tmp.name; tmp.close()
-            model.infer(ref_file=str(ref_wav), ref_text="",
+            model.infer(ref_file=str(ref_wav), ref_text=ref_text,
                         gen_text=chunk, file_wave=path)
             if radio:                     apply_radio_effect(path)
             if abs(speed - 1.0) >= 0.05: apply_speed(path, speed)

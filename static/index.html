@@ -375,7 +375,7 @@ details[open] summary::before { transform: rotate(90deg); }
         <label for="presetRadio">Efecto de radio</label>
       </div>
       <div class="form-row">
-        <label>Idioma <span style="color:var(--muted);font-weight:400">(solo XTTS2)</span></label>
+        <label>Idioma <span style="color:var(--muted);font-weight:400">(XTTS2 / F5-TTS / Chatterbox; ignorado por Piper)</span></label>
         <select id="presetLang">
           <option value="es">Español</option>
           <option value="en">English</option>
@@ -779,9 +779,25 @@ details[open] summary::before { transform: rotate(90deg); }
         <div class="help-step-body">
           <div class="help-step-title">Clonar o crear una voz</div>
           <div class="help-step-text">
-            En la pestaña <b>🎤 XTTS2</b> sube un archivo <code>.wav</code> de referencia
-            (10-30 s de habla limpia) para clonar una voz, o en <b>🤖 Piper</b>
-            descarga una voz neuronal del catálogo (sin GPU, más rápida).
+            Tienes 4 motores TTS, cada uno con sus ventajas:
+          </div>
+          <ul class="help-params">
+            <li><b>🎤 XTTS2</b> — clonación a partir de un WAV de 10-30 s. Calidad
+              alta, soporta 17 idiomas. Requiere GPU para velocidad razonable.</li>
+            <li><b>🤖 Piper</b> — descarga voces neuronales del catálogo
+              (sin GPU, muy rápida). El idioma viene fijado por el modelo elegido,
+              no se cambia desde el preset.</li>
+            <li><b>🔊 F5-TTS</b> — clonación con WAV de <b>3-5 s</b>, calidad
+              superior a XTTS2. Soporta los mismos idiomas que XTTS desde el
+              selector. Modelo grande (~3 GB descarga inicial), requiere ≥12 GB
+              VRAM.</li>
+            <li><b>🗣 Chatterbox</b> — multilingüe (23 idiomas), muy rápido
+              (&lt;200 ms por fragmento), 4-6 GB VRAM. Incluye marca de agua
+              imperceptible (Perth/Resemble AI). Requiere WAV de ≥5 s.</li>
+          </ul>
+          <div class="help-step-text">
+            Sube/descarga la voz desde la pestaña correspondiente. Se registra
+            con un ID y queda disponible para asociarla a un preset.
           </div>
         </div>
       </div>
@@ -800,7 +816,10 @@ details[open] summary::before { transform: rotate(90deg); }
           <ul class="help-params">
             <li><b>Velocidad</b> — más lento o más rápido</li>
             <li><b>Tono</b> — más grave o más agudo (semitonos)</li>
-            <li><b>Idioma</b> — solo aplica a XTTS2</li>
+            <li><b>Idioma</b> — XTTS2, F5-TTS y Chatterbox lo respetan
+              (Chatterbox vía <code>language_id</code>, F5-TTS vía <code>ref_text</code>
+              en el idioma elegido). Piper ignora este campo: el idioma viene
+              fijado por el modelo descargado.</li>
             <li><b>Efecto radio</b> — bandpass + clipping para sonido walkie-talkie</li>
           </ul>
           <div class="help-step-text">Guarda con un nombre — ese nombre es lo que se usa en la API.</div>
