@@ -81,6 +81,46 @@ build.bat
 python -c "import sqlite3, os; c = sqlite3.connect(os.path.expandvars(r'$APPDATA\MyVoices\myvoices.db')); c.row_factory = sqlite3.Row; [print(f\"[{r['level']}] {r['ts']}  {r['message'][:300]}\") for r in c.execute('SELECT * FROM logs ORDER BY id DESC LIMIT 50')]"
 ```
 
+## Hooks de validación automática (opcional pero recomendado)
+
+El proyecto incluye scripts en `.claude/hooks/` que ejecutan ruff + pytest:
+- En cada **Stop** (fin de turno) si hay `.py` modificados → bloquea con feedback si falla.
+- Antes de cualquier `git commit *` → bloquea el commit si falla.
+
+Para activarlos en una máquina nueva, añade este bloque a `.claude/settings.json`
+(merge con tus permisos existentes):
+
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "shell": "bash",
+        "command": "bash .claude/hooks/validate_hook.sh stop",
+        "timeout": 90,
+        "statusMessage": "Validando con ruff + pytest"
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "shell": "bash",
+        "if": "Bash(git commit*)",
+        "command": "bash .claude/hooks/validate_hook.sh pretool",
+        "timeout": 90,
+        "statusMessage": "Validando antes del commit (ruff + pytest)"
+      }]
+    }]
+  }
+}
+```
+
+Tras añadirlo, abre `/hooks` una vez en Claude Code (o reinicia) para que los
+detecte. El `.claude/settings.json` está gitignored (es personal). Los scripts
+en `.claude/hooks/` sí se versionan.
+
 ## Glosario de archivos
 
 - `server.py` — FastAPI app + lógica TTS + MCP HTTP. Punto de entrada del backend.

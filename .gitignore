@@ -56,7 +56,10 @@ htmlcov/
 *.sublime-workspace
 
 # ── Claude Code (contexto de sesión local) ────────────────────────────────────
-.claude/
+# Ignoramos los hijos inmediatos de .claude/ (settings.json personal, sessions,
+# logs…) PERO mantenemos versionado .claude/hooks/ con scripts compartibles.
+.claude/*
+!.claude/hooks/
 
 # ── Sistema operativo ─────────────────────────────────────────────────────────
 Thumbs.db
