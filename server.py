@@ -500,6 +500,7 @@ async def _lifespan(_app):
     global _mcp, _mcp_inner_asgi, _tts_queue
     _tts_queue = asyncio.PriorityQueue()  # create fresh per event loop
     _mcp, _mcp_inner_asgi = _build_mcp()
+    _invalidate_f5_ref_text_caches()
     worker_task = asyncio.create_task(_tts_worker())
     async with _mcp.session_manager.run():
         yield
@@ -604,13 +605,41 @@ else:
 
 # ── F5-TTS (lazy) ─────────────────────────────────────────────────────────────
 
+# Bump this when the ref_text computation logic changes; it invalidates all
+# sidecar caches on next startup so they get recomputed correctly.
+_F5_REF_TEXT_CACHE_VERSION = "2"
+
+
+def _invalidate_f5_ref_text_caches() -> None:
+    """Delete sidecar .lang.txt files whose cache version doesn't match current."""
+    version_file = VOICES_DIR / ".f5_cache_version"
+    try:
+        if (version_file.exists()
+                and version_file.read_text(encoding="utf-8").strip() == _F5_REF_TEXT_CACHE_VERSION):
+            return
+        deleted = 0
+        for sidecar in VOICES_DIR.glob("*.*.txt"):
+            parts = sidecar.stem.split(".")
+            if len(parts) == 2 and len(parts[1]) <= 3:  # <stem>.<lang>.txt
+                sidecar.unlink(missing_ok=True)
+                deleted += 1
+        version_file.write_text(_F5_REF_TEXT_CACHE_VERSION, encoding="utf-8")
+        if deleted:
+            _log.info(f"[F5-TTS] Invalidados {deleted} sidecar(s) de ref_text (v{_F5_REF_TEXT_CACHE_VERSION})")
+    except Exception as exc:
+        _log.warning(f"[F5-TTS] No se pudo limpiar caches de ref_text: {exc}")
+
 
 def _get_f5_ref_text(ref_wav_path: Path, language: str) -> str:
-    """Return the transcript of *ref_wav_path* with a language hint for Whisper.
+    """Return the transcript of the first 15 s of *ref_wav_path*, with a
+    language hint for Whisper.  Result is cached to a sidecar
+    ``<wav>.<lang>.txt`` so subsequent calls are instant.
 
-    Result is cached to a sidecar ``<wav>.<lang>.txt`` file so subsequent calls
-    are instant.  Falls back to ``""`` on any failure — F5-TTS will then
-    auto-transcribe without a language hint (same as the original behaviour).
+    The 15-second clip matches F5-TTS's internal ``clip_short=True`` behaviour;
+    transcribing the full audio would produce a ref_text longer than the audio
+    F5-TTS actually uses, causing timing desync and unintelligible output.
+
+    Falls back to ``""`` on any failure (F5-TTS auto-transcribes as fallback).
     """
     cache_path = ref_wav_path.with_suffix(f".{language}.txt")
     if cache_path.exists():
@@ -619,9 +648,28 @@ def _get_f5_ref_text(ref_wav_path: Path, language: str) -> str:
         except Exception:
             pass
     try:
+        import tempfile  # noqa: PLC0415
+
+        import torchaudio  # noqa: PLC0415
         from f5_tts.infer.utils_infer import transcribe as _f5_transcribe  # noqa: PLC0415
-        text = _f5_transcribe(str(ref_wav_path), language=language)
-        text = (text or "").strip()
+
+        # Clip to the same 15-second window F5-TTS uses internally.
+        audio, sr = torchaudio.load(str(ref_wav_path))
+        max_samples = 15 * sr
+        if audio.shape[-1] > max_samples:
+            audio = audio[..., :max_samples]
+
+        fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        try:
+            torchaudio.save(tmp_path, audio, sr)
+            text = (_f5_transcribe(tmp_path, language=language) or "").strip()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
         cache_path.write_text(text, encoding="utf-8")
         _log.info(f"[F5-TTS] ref_text cacheado ({language}): {text!r}")
         return text
