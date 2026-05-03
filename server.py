@@ -607,7 +607,7 @@ else:
 
 # Bump this when the ref_text computation logic changes; it invalidates all
 # sidecar caches on next startup so they get recomputed correctly.
-_F5_REF_TEXT_CACHE_VERSION = "2"
+_F5_REF_TEXT_CACHE_VERSION = "3"  # v3: clip to 12 s (matches F5-TTS internal hard cutoff)
 
 
 def _invalidate_f5_ref_text_caches() -> None:
@@ -653,9 +653,10 @@ def _get_f5_ref_text(ref_wav_path: Path, language: str) -> str:
         import torchaudio  # noqa: PLC0415
         from f5_tts.infer.utils_infer import transcribe as _f5_transcribe  # noqa: PLC0415
 
-        # Clip to the same 15-second window F5-TTS uses internally.
+        # F5-TTS hard-clips reference audio to 12 s internally (preprocess_ref_audio_text).
+        # Transcribe the same window so ref_text matches what the model actually uses.
         audio, sr = torchaudio.load(str(ref_wav_path))
-        max_samples = 15 * sr
+        max_samples = 12 * sr
         if audio.shape[-1] > max_samples:
             audio = audio[..., :max_samples]
 

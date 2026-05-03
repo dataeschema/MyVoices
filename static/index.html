@@ -375,7 +375,7 @@ details[open] summary::before { transform: rotate(90deg); }
         <label for="presetRadio">Efecto de radio</label>
       </div>
       <div class="form-row">
-        <label>Idioma <span style="color:var(--muted);font-weight:400">(XTTS2 / F5-TTS / Chatterbox; ignorado por Piper)</span></label>
+        <label>Idioma <span style="color:var(--muted);font-weight:400">(XTTS2 / Chatterbox; F5-TTS solo inglés/chino; ignorado por Piper)</span></label>
         <select id="presetLang">
           <option value="es">Español</option>
           <option value="en">English</option>
@@ -684,11 +684,15 @@ details[open] summary::before { transform: rotate(90deg); }
 
     <div class="card">
       <div class="card-title">🔊 Registrar voz F5-TTS</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
-        Sube un WAV de referencia de <b>3–5 segundos</b> con voz clara y sin ruido de fondo.
-        F5-TTS usa ese audio para clonar la voz con calidad superior a XTTSv2.
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">
+        Sube un WAV de referencia de <b>3–12 segundos</b> con voz clara y sin ruido de fondo.
         El modelo se descarga automáticamente la primera vez (~3 GB).
       </p>
+      <div style="background:rgba(255,180,0,0.12);border:1px solid rgba(255,180,0,0.35);border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:14px">
+        ⚠️ <b>F5-TTS está optimizado para inglés y chino.</b>
+        En otros idiomas (español, francés…) el resultado puede sonar con acento inglés con independencia del preset.
+        Para español de calidad usa <b>XTTSv2</b> o <b>Chatterbox</b>.
+      </div>
       <div class="drop-zone" id="f5ttsDropZone" onclick="document.getElementById('f5ttsWavFile').click()">
         <input type="file" id="f5ttsWavFile" accept=".wav" onchange="onF5ttsWavSelected(this)">
         <div id="f5ttsDropLabel">📂 Arrastra un archivo .wav aquí o haz clic para seleccionarlo</div>
@@ -787,10 +791,10 @@ details[open] summary::before { transform: rotate(90deg); }
             <li><b>🤖 Piper</b> — descarga voces neuronales del catálogo
               (sin GPU, muy rápida). El idioma viene fijado por el modelo elegido,
               no se cambia desde el preset.</li>
-            <li><b>🔊 F5-TTS</b> — clonación con WAV de <b>3-5 s</b>, calidad
-              superior a XTTS2. Soporta los mismos idiomas que XTTS desde el
-              selector. Modelo grande (~3 GB descarga inicial), requiere ≥12 GB
-              VRAM.</li>
+            <li><b>🔊 F5-TTS</b> — clonación con WAV de <b>3-12 s</b>.
+              <b>Optimizado para inglés y chino</b>; en otros idiomas puede
+              sonar con acento inglés (limitación del modelo base). Modelo
+              grande (~3 GB descarga inicial), requiere ≥12 GB VRAM.</li>
             <li><b>🗣 Chatterbox</b> — multilingüe (23 idiomas), muy rápido
               (&lt;200 ms por fragmento), 4-6 GB VRAM. Incluye marca de agua
               imperceptible (Perth/Resemble AI). Requiere WAV de ≥5 s.</li>
@@ -816,10 +820,11 @@ details[open] summary::before { transform: rotate(90deg); }
           <ul class="help-params">
             <li><b>Velocidad</b> — más lento o más rápido</li>
             <li><b>Tono</b> — más grave o más agudo (semitonos)</li>
-            <li><b>Idioma</b> — XTTS2, F5-TTS y Chatterbox lo respetan
-              (Chatterbox vía <code>language_id</code>, F5-TTS vía <code>ref_text</code>
-              en el idioma elegido). Piper ignora este campo: el idioma viene
-              fijado por el modelo descargado.</li>
+            <li><b>Idioma</b> — XTTSv2 y Chatterbox lo respetan plenamente.
+              F5-TTS transcribe el WAV de referencia con ese idioma pero el
+              modelo base <b>solo sintetiza bien inglés y chino</b>; en español
+              suena con acento inglés. Piper ignora este campo (el idioma viene
+              fijado por el modelo descargado).</li>
             <li><b>Efecto radio</b> — bandpass + clipping para sonido walkie-talkie</li>
           </ul>
           <div class="help-step-text">Guarda con un nombre — ese nombre es lo que se usa en la API.</div>
