@@ -42,6 +42,10 @@ build_out.txt
 # ── build.bat user state ─────────────────────────────────────────────────────
 .build_config
 
+# ── Paquetes wheel temporales (instalación --no-deps) ────────────────────────
+tmpcb_pkg/
+*.whl
+
 # ── Coverage / pytest ─────────────────────────────────────────────────────────
 .coverage
 .coverage.*
