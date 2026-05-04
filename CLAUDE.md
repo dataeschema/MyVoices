@@ -21,10 +21,13 @@ Estas reglas aplican **siempre**, sin que el usuario las tenga que pedir.
   (lo arregla `--fix`). El CI falla si ruff no pasa.
 
 ### 3. Documentación
-- Cambios en API REST, MCP tools, motores TTS o flujo de UI requieren actualizar
-  **los dos READMEs** (`README.md` y `README.es.md`) y la pestaña **Ayuda** en
-  `static/index.html` (la sección con `id="tab-help"`).
-- Cambios en build o setup requieren actualizar `BUILD_GUIDE.md` y
+- **Cualquier cambio de funcionalidad** requiere actualizar **siempre**:
+  1. `README.md` (inglés)
+  2. `README.es.md` (español)
+  3. La pestaña **Ayuda** en `static/index.html` (`id="tab-help"`)
+- Esto aplica a: nuevas features, cambios en API REST, MCP tools, motores TTS,
+  flujo de UI, parámetros, comportamientos o limitaciones. No hay excepciones.
+- Cambios en build o setup requieren actualizar además `BUILD_GUIDE.md` y
   `GUIA_EJECUTABLE.md`.
 
 ### 4. Diagnóstico de errores
@@ -100,11 +103,14 @@ Estas reglas aplican **siempre**, sin que el usuario las tenga que pedir.
 - El test `test_mcp_clients_lists_all_supported` mantiene el set exacto de IDs.
   Al añadir un cliente nuevo, actualizar ese test.
 
-### 10. Commits
-- Mensaje en inglés, formato corto (1ª línea < 80 chars). Cuerpo opcional con
-  el WHY. Footer con `Co-Authored-By: Claude ...`.
-- Hago commit y push solo cuando los tests pasan y el ruff está limpio.
-- Si toco la rama `main` directamente está OK (es proyecto personal del usuario).
+### 10. Flujo de rama
+- **Siempre trabajo en una rama** (`git checkout -b feature/nombre`), nunca
+  directamente en `main`.
+- Al terminar: tests pasan, ruff limpio, documentación actualizada → merge a
+  `main` con `--no-ff` y borrar la rama.
+- Mensaje de commit en inglés, 1ª línea < 80 chars. Cuerpo opcional con el WHY.
+  Footer con `Co-Authored-By: Claude ...`.
+- Push a remote solo tras el merge.
 
 ### 11. Comunicación
 - Respuestas concisas en español. Sin emojis a menos que el usuario los use.
