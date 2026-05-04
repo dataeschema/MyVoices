@@ -511,6 +511,10 @@ details[open] summary::before { transform: rotate(90deg); }
         </div>
         <div id="mcpTestResult" style="font-size:12px;margin-top:8px"></div>
       </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary btn-sm" onclick="downloadDxt()">📦 Descargar MyVoices.dxt</button>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px">Extensión para Claude Desktop (stdio, sin token)</span>
+      </div>
     </div>
 
     <!-- Frases guardadas — clickable rows, created from test panel -->
@@ -1607,6 +1611,42 @@ async function testDownload() {
   } finally {
     btn.disabled = !_lastPlayedPreset;
     btn.textContent = '⬇ Descargar audio';
+  }
+}
+
+// ── Download .dxt ─────────────────────────────────────────────────────────
+async function downloadDxt() {
+  try {
+    const res = await fetch('/api/export/dxt');
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      showToast(e.detail || 'Error generando el .dxt', 'error');
+      return;
+    }
+    const blob = await res.blob();
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: 'MyVoices.dxt',
+          types: [{ description: 'Claude Desktop Extension', accept: { 'application/zip': ['.dxt'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        showToast('MyVoices.dxt guardado', 'success');
+      } catch (err) {
+        if (err.name !== 'AbortError') throw err;
+      }
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'MyVoices.dxt';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast('MyVoices.dxt descargado', 'success');
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
   }
 }
 

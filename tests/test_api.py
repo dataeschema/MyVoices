@@ -218,6 +218,50 @@ def test_delete_phrase_not_found(client):
     assert client.delete("/api/phrases/9999").status_code == 404
 
 
+# ── DXT export ────────────────────────────────────────────────────────────────
+
+def test_export_dxt_returns_zip(client, tmp_path, monkeypatch):
+    """GET /api/export/dxt devuelve un ZIP válido con los tres archivos esperados."""
+    import zipfile
+
+    import server
+
+    # Crear archivos fuente temporales para simular el entorno de desarrollo
+    dxt_dir = tmp_path / "dxt"
+    dxt_dir.mkdir()
+    (dxt_dir / "manifest.json").write_text('{"manifest_version":"0.3"}')
+    (tmp_path / "mcp_server.py").write_text("# stub")
+    (tmp_path / "mcp_tools.py").write_text("# stub")
+
+    monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
+
+    r = client.get("/api/export/dxt")
+    assert r.status_code == 200
+    assert "attachment" in r.headers.get("content-disposition", "")
+    assert "MyVoices.dxt" in r.headers.get("content-disposition", "")
+
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    names = zf.namelist()
+    assert "manifest.json" in names
+    assert "mcp_server.py" in names
+    assert "mcp_tools.py" in names
+
+
+def test_export_dxt_missing_file_returns_500(client, tmp_path, monkeypatch):
+    """Si falta un archivo fuente, el endpoint devuelve 500."""
+    import server
+
+    # dxt/manifest.json existe pero los .py no
+    dxt_dir = tmp_path / "dxt"
+    dxt_dir.mkdir()
+    (dxt_dir / "manifest.json").write_text('{}')
+
+    monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
+
+    r = client.get("/api/export/dxt")
+    assert r.status_code == 500
+
+
 # ── Logs ──────────────────────────────────────────────────────────────────────
 
 def test_get_logs(client):

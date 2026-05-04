@@ -108,6 +108,10 @@ a = Analysis(
     datas=[
         ("static", "static"),
         ("appicon.ico", "."),   # icono disponible en _MEIPASS
+        # Fuentes necesarias para generar MyVoices.dxt desde la app
+        ("dxt/manifest.json", "dxt"),
+        ("mcp_server.py", "."),
+        ("mcp_tools.py", "."),
         *tts_datas,
         *trainer_datas,
         *typeguard_datas,

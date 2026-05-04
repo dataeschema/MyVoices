@@ -138,7 +138,7 @@ import wave as wave_module
 
 import torch
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -1832,6 +1832,52 @@ async def api_speak_download(req: SpeakRequest, format: str = "wav"):
         media_type=_AUDIO_MIME[fmt],
         filename=f"myvoices_{safe_name}.{fmt}",
         background=BackgroundTask(_cleanup),
+    )
+
+
+# ── DXT export ────────────────────────────────────────────────────────────────
+
+def _dxt_source_root() -> Path:
+    """Return the directory that contains mcp_server.py and dxt/manifest.json.
+
+    In dev mode this is the project root (same as __file__'s parent).
+    In a frozen PyInstaller bundle it is sys._MEIPASS (_internal/).
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
+
+@app.get("/api/export/dxt")
+async def api_export_dxt():
+    """Build and return MyVoices.dxt — the Claude Desktop Extension package."""
+    import io  # noqa: PLC0415
+    import zipfile  # noqa: PLC0415
+
+    root = _dxt_source_root()
+    bundle = [
+        (root / "dxt" / "manifest.json", "manifest.json"),
+        (root / "mcp_server.py",         "mcp_server.py"),
+        (root / "mcp_tools.py",          "mcp_tools.py"),
+    ]
+    for src, _ in bundle:
+        if not src.exists():
+            raise HTTPException(
+                500,
+                f"Archivo fuente '{src.name}' no encontrado en {root}. "
+                "Si usas el ejecutable, puede que necesites rebuildar el bundle.",
+            )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for src, dst in bundle:
+            zf.write(src, dst)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="MyVoices.dxt"'},
     )
 
 
