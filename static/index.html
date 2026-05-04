@@ -919,11 +919,23 @@ Content-Type: application/json
             <li><code>get_logs</code>, <code>get_diagnostics</code>, <code>load_model</code>, <code>set_verbose</code> — <i>diagnóstico</i> (para que el LLM pueda depurar errores sin pedirte logs)</li>
           </ul>
           <div class="help-step-text" style="margin-top:8px">
-            <b>Antes de conectar un cliente</b>: activa el servidor MCP desde la
-            pestaña <i>Principal</i> (tarjeta 🤖 Servidor MCP) — el toggle
-            genera el Bearer token y enciende el endpoint <code>/mcp/</code>.
-            Cuando esté ON, elige tu cliente abajo y copia la configuración:
+            Hay dos formas de conectar un cliente:
           </div>
+          <ul class="help-params">
+            <li>
+              <b>📦 Claude Desktop (.dxt) — recomendado</b><br>
+              Pulsa <i>📦 Descargar MyVoices.dxt</i> en la tarjeta MCP de la pestaña
+              Principal. Arrastra el archivo a Claude Desktop y selecciona la carpeta
+              <code>dist\MyVoices\</code> cuando se solicite. Claude Desktop lanzará
+              automáticamente <code>mcp_server.exe</code> (incluido en el bundle) en
+              cada sesión. No requiere token ni configuración manual.
+            </li>
+            <li style="margin-top:8px">
+              <b>🌐 HTTP (cualquier cliente)</b><br>
+              Activa el toggle <i>Servidor MCP HTTP</i> en la tarjeta MCP.
+              Elige tu cliente abajo y copia la configuración auto-rellenada con URL y Bearer token:
+            </li>
+          </ul>
 
           <!-- Selector de clientes -->
           <div id="mcpClientTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px"></div>
