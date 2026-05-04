@@ -1852,25 +1852,31 @@ def _dxt_source_root() -> Path:
 async def api_export_dxt():
     """Build and return MyVoices.dxt — the Claude Desktop Extension package.
 
-    The .dxt is a ZIP containing only manifest.json.  The actual MCP server
-    binary (mcp_server.exe) ships alongside MyVoices.exe in dist\\MyVoices\\ and
-    is referenced via ${user_config.myvoices_dir} in the manifest — it is NOT
-    bundled inside the .dxt.
+    The .dxt bundles manifest.json + mcp_server.py.  mcp_server.py satisfies
+    the DXT entry_point validation requirement; the actual command Claude Desktop
+    runs is mcp_server.exe (referenced via ${user_config.myvoices_dir} in the
+    manifest).  mcp_server.exe ships in dist\\MyVoices\\ — it is NOT inside the .dxt.
     """
     import io  # noqa: PLC0415
     import zipfile  # noqa: PLC0415
 
-    manifest = _dxt_source_root() / "dxt" / "manifest.json"
-    if not manifest.exists():
-        raise HTTPException(
-            500,
-            "manifest.json no encontrado. "
-            "Si usas el ejecutable, puede que necesites rebuildar el bundle.",
-        )
+    root = _dxt_source_root()
+    bundle = [
+        (root / "dxt" / "manifest.json", "manifest.json"),
+        (root / "mcp_server.py",         "mcp_server.py"),
+    ]
+    for src, name in bundle:
+        if not src.exists():
+            raise HTTPException(
+                500,
+                f"'{name}' no encontrado en {root}. "
+                "Si usas el ejecutable, puede que necesites rebuildar el bundle.",
+            )
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(manifest, "manifest.json")
+        for src, dst in bundle:
+            zf.write(src, dst)
     buf.seek(0)
 
     return StreamingResponse(
@@ -1993,6 +1999,35 @@ _MCP_CLIENT_TEMPLATES = {
             "Connectors pega la URL y añade un header Authorization."
         ),
     },
+    "cline": {
+        "label":      "Cline (VS Code)",
+        "transport":  "http",
+        "config_path": "~/.cline/mcp_settings.json o .cline/mcp_settings.json (proyecto)",
+        "instructions": (
+            "Abre Cline → Settings → MCP Servers → Edit Config. "
+            "Añade la entrada dentro de \"mcpServers\" y guarda. "
+            "Cline recarga la configuración automáticamente."
+        ),
+    },
+    "windsurf": {
+        "label":      "Windsurf",
+        "transport":  "http",
+        "config_path": "~/.codeium/windsurf/mcp_config.json",
+        "instructions": (
+            "Edita el fichero (o créalo si no existe). Reinicia Windsurf "
+            "o usa Cascade → Refresh MCP Servers tras guardar."
+        ),
+    },
+    "vscode_copilot": {
+        "label":      "VS Code Copilot",
+        "transport":  "http",
+        "config_path": ".vscode/mcp.json (workspace) — requiere VS Code ≥ 1.99 + GitHub Copilot",
+        "instructions": (
+            "Crea .vscode/mcp.json en la raíz del proyecto. "
+            "Acepta el prompt de confianza que muestra VS Code. "
+            "En el chat de Copilot selecciona modo Agent para usar las tools."
+        ),
+    },
     "generic_http": {
         "label":      "Genérico (HTTP)",
         "transport":  "http",
@@ -2077,6 +2112,29 @@ def _render_snippet(client_id: str, url: str, token: str) -> dict:
         if token:
             curl += f' \\\n     -H "Authorization: {auth_header}"'
         return {"format": "bash", "content": curl}
+    if client_id in ("cline", "windsurf"):
+        # Mismo esquema que Cursor: mcpServers sin campo type
+        body = {
+            "mcpServers": {
+                "myvoices": {
+                    "url":     url,
+                    "headers": {"Authorization": auth_header} if token else {},
+                }
+            }
+        }
+        return {"format": "json", "content": json.dumps(body, indent=2)}
+    if client_id == "vscode_copilot":
+        # VS Code usa "servers" (no "mcpServers") y requiere type: "http"
+        body = {
+            "servers": {
+                "myvoices": {
+                    "type":    "http",
+                    "url":     url,
+                    "headers": {"Authorization": auth_header} if token else {},
+                }
+            }
+        }
+        return {"format": "json", "content": json.dumps(body, indent=2)}
     raise HTTPException(404, f"client '{client_id}' not supported")
 
 
@@ -2161,10 +2219,25 @@ async def api_mcp_test(request: Request):
         "params": {"protocolVersion": "2024-11-05", "capabilities": {},
                    "clientInfo": {"name": "myvoices-self-test", "version": "1"}},
     }
+    mcp_url = _mcp_url(request)
     try:
         async with httpx.AsyncClient(timeout=10.0) as c:
-            r = await c.post(_mcp_url(request), json=payload, headers=headers)
+            r = await c.post(mcp_url, json=payload, headers=headers)
         ok = r.status_code == 200 and "protocolVersion" in r.text
-        return {"ok": ok, "status": r.status_code, "body_excerpt": r.text[:200]}
+        if not ok:
+            return {"ok": False, "status": r.status_code, "body_excerpt": r.text[:200]}
+        # Segunda llamada: tools/list para confirmar que las tools responden
+        tools_payload = {
+            "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {},
+        }
+        tool_count = 0
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as c:
+                rt = await c.post(mcp_url, json=tools_payload, headers=headers)
+            tool_count = len(rt.json().get("result", {}).get("tools", []))
+        except Exception:
+            pass
+        return {"ok": True, "status": r.status_code, "tool_count": tool_count,
+                "body_excerpt": r.text[:200]}
     except Exception as exc:
         return {"ok": False, "detail": str(exc)}

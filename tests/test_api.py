@@ -220,8 +220,8 @@ def test_delete_phrase_not_found(client):
 
 # ── DXT export ────────────────────────────────────────────────────────────────
 
-def test_export_dxt_returns_zip_with_manifest(client, tmp_path, monkeypatch):
-    """GET /api/export/dxt devuelve un ZIP con solo manifest.json."""
+def test_export_dxt_returns_zip_with_manifest_and_entry_point(client, tmp_path, monkeypatch):
+    """GET /api/export/dxt devuelve un ZIP con manifest.json y mcp_server.py."""
     import json
     import zipfile
 
@@ -231,6 +231,7 @@ def test_export_dxt_returns_zip_with_manifest(client, tmp_path, monkeypatch):
     dxt_dir.mkdir()
     manifest_content = '{"manifest_version": "0.3", "name": "myvoices-tts"}'
     (dxt_dir / "manifest.json").write_text(manifest_content)
+    (tmp_path / "mcp_server.py").write_text("# entry point stub")
 
     monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
 
@@ -240,13 +241,12 @@ def test_export_dxt_returns_zip_with_manifest(client, tmp_path, monkeypatch):
     assert "MyVoices.dxt" in r.headers.get("content-disposition", "")
 
     zf = zipfile.ZipFile(io.BytesIO(r.content))
-    # El .dxt solo contiene manifest.json — mcp_server.exe va en dist\MyVoices\
-    assert zf.namelist() == ["manifest.json"]
+    assert set(zf.namelist()) == {"manifest.json", "mcp_server.py"}
     assert json.loads(zf.read("manifest.json"))["name"] == "myvoices-tts"
 
 
-def test_export_dxt_manifest_uses_binary_type(client, tmp_path, monkeypatch):
-    """El manifest.json del .dxt usa type:binary y referencia mcp_server.exe."""
+def test_export_dxt_manifest_uses_python_type_with_exe_command(client, tmp_path, monkeypatch):
+    """El manifest usa type:python con entry_point y command apuntando a mcp_server.exe."""
     import json
     import zipfile
 
@@ -256,6 +256,7 @@ def test_export_dxt_manifest_uses_binary_type(client, tmp_path, monkeypatch):
     dxt_dir.mkdir()
     real_manifest = Path(__file__).parent.parent / "dxt" / "manifest.json"
     (dxt_dir / "manifest.json").write_bytes(real_manifest.read_bytes())
+    (tmp_path / "mcp_server.py").write_text("# stub")
 
     monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
 
@@ -263,7 +264,8 @@ def test_export_dxt_manifest_uses_binary_type(client, tmp_path, monkeypatch):
     assert r.status_code == 200
 
     manifest = json.loads(zipfile.ZipFile(io.BytesIO(r.content)).read("manifest.json"))
-    assert manifest["server"]["type"] == "binary"
+    assert manifest["server"]["type"] == "python"
+    assert manifest["server"]["entry_point"] == "mcp_server.py"
     assert "mcp_server.exe" in manifest["server"]["mcp_config"]["command"]
     assert "myvoices_dir" in manifest["user_config"]
 

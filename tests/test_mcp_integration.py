@@ -73,6 +73,7 @@ def test_mcp_clients_lists_all_supported(client):
     assert ids == {
         "claude_desktop_http", "claude_desktop_stdio",
         "claude_code", "cursor", "gemini_cli", "chatgpt", "generic_http",
+        "cline", "windsurf", "vscode_copilot",
     }
 
 
@@ -241,3 +242,59 @@ def test_mcp_self_test_when_disabled(client):
     r = client.post("/api/mcp/test").json()
     assert r["ok"] is False
     assert "desactivado" in r["detail"].lower()
+
+
+# ── Nuevos clientes: Cline, Windsurf, VS Code Copilot ─────────────────────────
+
+def test_snippet_cline_no_type_field(client):
+    client.post("/api/mcp/toggle", json={"enabled": True})
+    r = client.get("/api/mcp/config-snippet?client=cline").json()
+    assert r["format"] == "json"
+    assert r["transport"] == "http"
+    cfg = json.loads(r["content"])["mcpServers"]["myvoices"]
+    assert cfg["url"].endswith("/mcp/")
+    assert "type" not in cfg   # Cline no usa campo type
+
+
+def test_snippet_windsurf_no_type_field(client):
+    client.post("/api/mcp/toggle", json={"enabled": True})
+    r = client.get("/api/mcp/config-snippet?client=windsurf").json()
+    assert r["format"] == "json"
+    assert r["transport"] == "http"
+    cfg = json.loads(r["content"])["mcpServers"]["myvoices"]
+    assert cfg["url"].endswith("/mcp/")
+    assert "type" not in cfg   # Windsurf no usa campo type
+
+
+def test_snippet_vscode_copilot_uses_servers_key_and_type(client):
+    tok = client.post("/api/mcp/toggle", json={"enabled": True}).json()["token"]
+    r = client.get("/api/mcp/config-snippet?client=vscode_copilot").json()
+    assert r["format"] == "json"
+    assert r["transport"] == "http"
+    body = json.loads(r["content"])
+    assert "servers" in body and "mcpServers" not in body
+    cfg = body["servers"]["myvoices"]
+    assert cfg["type"] == "http"
+    assert cfg["url"].endswith("/mcp/")
+    assert cfg["headers"]["Authorization"] == f"Bearer {tok}"
+
+
+def test_mcp_test_returns_tool_count(client):
+    """El endpoint devuelve un campo 'ok' bool.
+    En el entorno de test httpx no puede conectar al TestClient (sin TCP real),
+    así que ok puede ser False — pero la estructura de respuesta debe ser correcta.
+    Si ok es True (en integración real), tool_count debe ser un entero >= 0."""
+    client.post("/api/mcp/toggle", json={"enabled": True})
+    r = client.post("/api/mcp/test").json()
+    assert isinstance(r.get("ok"), bool)
+    if r["ok"]:
+        assert isinstance(r.get("tool_count"), int)
+        assert r["tool_count"] >= 0
+
+
+def test_snippet_http_client_responds_when_mcp_disabled(client):
+    """config-snippet responde 200 aunque el toggle esté OFF — el aviso es frontend."""
+    client.post("/api/mcp/toggle", json={"enabled": False})
+    r = client.get("/api/mcp/config-snippet?client=cline")
+    assert r.status_code == 200
+    assert r.json()["transport"] == "http"

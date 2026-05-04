@@ -108,8 +108,9 @@ a = Analysis(
     datas=[
         ("static", "static"),
         ("appicon.ico", "."),   # icono disponible en _MEIPASS
-        # Manifest del DXT de Claude Desktop (leído por api_export_dxt)
+        # Fuentes para generar MyVoices.dxt desde la app (api_export_dxt)
         ("dxt/manifest.json", "dxt"),
+        ("mcp_server.py", "."),   # entry_point del DXT — bundleado en el .zip
         *tts_datas,
         *trainer_datas,
         *typeguard_datas,

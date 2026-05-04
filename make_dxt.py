@@ -7,13 +7,18 @@ Uso:
 Salida:
     MyVoices.dxt  (en la raíz del proyecto)
 
-El .dxt es un ZIP con un único archivo: manifest.json.
-El servidor MCP real (mcp_server.exe) se genera con build.bat y queda en
-dist\\MyVoices\\. El manifest lo referencia vía ${user_config.myvoices_dir}.
+El .dxt contiene:
+    manifest.json   — spec de la extensión (type: python, entry_point + mcp_config)
+    mcp_server.py   — requerido por el entry_point del DXT para pasar validación
+
+El comando real que Claude Desktop ejecuta es mcp_server.exe, que referencia
+${user_config.myvoices_dir}\\mcp_server.exe. El mcp_server.py está en el bundle
+solo para satisfacer la validación del entry_point — no se ejecuta como script.
 
 Instalación en Claude Desktop:
     1. Arrastra MyVoices.dxt a la ventana de Claude Desktop (o doble clic).
-    2. Cuando se pida, selecciona la carpeta dist\\MyVoices\\.
+    2. Cuando se pida, selecciona la carpeta dist\\MyVoices\\ (la que contiene
+       MyVoices.exe y mcp_server.exe).
     3. Arranca MyVoices antes de usar las tools.
 """
 import zipfile
@@ -22,16 +27,22 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 OUT = ROOT / "MyVoices.dxt"
 
-manifest = ROOT / "dxt" / "manifest.json"
-if not manifest.exists():
-    raise FileNotFoundError(f"No encontrado: {manifest}")
+BUNDLE = [
+    (ROOT / "dxt" / "manifest.json", "manifest.json"),
+    (ROOT / "mcp_server.py",         "mcp_server.py"),
+]
+
+for src, _ in BUNDLE:
+    if not src.exists():
+        raise FileNotFoundError(f"No encontrado: {src}")
 
 if OUT.exists():
     OUT.unlink()
 
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as zf:
-    zf.write(manifest, "manifest.json")
-    print(f"  + manifest.json  ({manifest.stat().st_size:,} bytes)")
+    for src, dst in BUNDLE:
+        zf.write(src, dst)
+        print(f"  + {dst}  ({src.stat().st_size:,} bytes)")
 
 size_kb = OUT.stat().st_size / 1024
 print(f"\nCreado: {OUT.name}  ({size_kb:.1f} KB)")
