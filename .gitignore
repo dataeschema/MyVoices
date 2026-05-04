@@ -46,6 +46,9 @@ build_out.txt
 tmpcb_pkg/
 *.whl
 
+# ── Claude Desktop Extension (artefacto de build, generado por make_dxt.py) ──
+*.dxt
+
 # ── Coverage / pytest ─────────────────────────────────────────────────────────
 .coverage
 .coverage.*

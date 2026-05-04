@@ -1,0 +1,34 @@
+{
+  "manifest_version": "0.3",
+  "name": "myvoices-tts",
+  "display_name": "MyVoices TTS",
+  "version": "1.0.0",
+  "description": "Voice synthesis for streaming. Cloned voices, presets and saved phrases via XTTSv2, Piper, F5-TTS and Chatterbox. Requires the MyVoices desktop app to be running.",
+  "long_description": "MyVoices integrates four TTS engines with voice cloning and a REST/MCP API. This extension connects Claude Desktop to a locally-running MyVoices instance using the bundled stdio MCP server (mcp_server.py), which forwards all calls to the local HTTP API. No internet connection required.",
+  "author": {
+    "name": "MyVoices",
+    "url": "https://github.com/dataeschema/MyVoices"
+  },
+  "repository": "https://github.com/dataeschema/MyVoices",
+  "license": "MIT",
+  "keywords": ["tts", "voice", "speech", "streaming", "sammi"],
+  "server": {
+    "type": "python",
+    "entry_point": "mcp_server.py"
+  },
+  "mcp_config": {
+    "command": "${user_config.myvoices_dir}\\venv\\Scripts\\python.exe",
+    "args": ["${__dirname}\\mcp_server.py"],
+    "env": {
+      "MYVOICES_URL": "http://localhost:8000"
+    }
+  },
+  "user_config": {
+    "myvoices_dir": {
+      "type": "directory",
+      "title": "Carpeta raíz de MyVoices",
+      "description": "Carpeta donde está instalado MyVoices (la que contiene venv\\, server.py, main.py…). Ejemplo: C:\\Users\\TuUsuario\\Documents\\MyVoices",
+      "required": true
+    }
+  }
+}
