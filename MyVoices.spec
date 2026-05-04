@@ -108,10 +108,8 @@ a = Analysis(
     datas=[
         ("static", "static"),
         ("appicon.ico", "."),   # icono disponible en _MEIPASS
-        # Fuentes necesarias para generar MyVoices.dxt desde la app
+        # Manifest del DXT de Claude Desktop (leído por api_export_dxt)
         ("dxt/manifest.json", "dxt"),
-        ("mcp_server.py", "."),
-        ("mcp_tools.py", "."),
         *tts_datas,
         *trainer_datas,
         *typeguard_datas,
@@ -315,4 +313,71 @@ coll = COLLECT(
     upx=False,
     upx_exclude=[],
     name="MyVoices",
+)
+
+# ── mcp_server.exe ────────────────────────────────────────────────────────────
+# Ejecutable independiente (--onefile) para el transporte stdio del DXT de
+# Claude Desktop. Solo incluye httpx + mcp (FastMCP); sin torch ni TTS.
+# Output: dist\mcp_server.exe → build.bat lo mueve a dist\MyVoices\.
+mcp_a = Analysis(
+    ["mcp_server.py"],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        "mcp",
+        "mcp.server",
+        "mcp.server.fastmcp",
+        "mcp.server.stdio",
+        "mcp.server.models",
+        "mcp.types",
+        "mcp.shared",
+        "mcp.shared.session",
+        "httpx",
+        "httpx._transports",
+        "httpx._transports.default",
+        "anyio",
+        "anyio._backends._asyncio",
+        "anyio._backends._trio",
+        "anyio.abc",
+        "pydantic",
+        "pydantic.v1",
+        "starlette.routing",
+        "starlette.responses",
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        "torch", "torchaudio", "torchvision",
+        "TTS", "pygame", "numpy", "PIL",
+        "matplotlib", "scipy", "tkinter",
+        "numba", "llvmlite", "wandb",
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+mcp_pyz = PYZ(mcp_a.pure, mcp_a.zipped_data, cipher=block_cipher)
+
+mcp_exe = EXE(
+    mcp_pyz,
+    mcp_a.scripts,
+    mcp_a.binaries,
+    mcp_a.zipfiles,
+    mcp_a.datas,
+    [],
+    name="mcp_server",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=True,   # servidor stdio — necesita consola
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
 )

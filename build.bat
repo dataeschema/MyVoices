@@ -238,7 +238,19 @@ if not "%PYINST_EXIT%"=="0" (
     exit /b 1
 )
 
-REM ── 12. Reporte final: duracion y tamano del bundle ─────────────────────────
+REM ── 12. Mover mcp_server.exe al bundle principal ────────────────────────────
+REM PyInstaller genera dist\mcp_server.exe (onefile). Lo movemos a
+REM dist\MyVoices\ para que viaje junto al ejecutable principal.
+if exist "dist\mcp_server.exe" (
+    echo Moviendo mcp_server.exe a dist\MyVoices\...
+    move /y "dist\mcp_server.exe" "dist\MyVoices\mcp_server.exe" >nul
+    echo mcp_server.exe listo en dist\MyVoices\.
+) else (
+    echo [WARN] dist\mcp_server.exe no encontrado ^(la compilacion puede haber fallado^).
+)
+echo.
+
+REM ── 13. Reporte final: duracion y tamano del bundle ─────────────────────────
 for /f %%t in ('powershell -nop -c "[int][double]::Parse((Get-Date -UFormat %%s))"') do set "T1=%%t"
 set /a DURATION_SEC=%T1%-%T0%
 set /a DURATION_MIN=DURATION_SEC/60
@@ -253,11 +265,15 @@ echo   BUILD COMPLETADO
 echo ============================================================
 echo.
 echo   Ejecutable:  dist\MyVoices\MyVoices.exe
+echo   MCP server:  dist\MyVoices\mcp_server.exe
 echo   Tamano:      %BUILD_SIZE%
 echo   Duracion:    %DURATION_MIN%m %DURATION_RES%s
 echo.
 echo   Para distribuir la app, copia TODA la carpeta dist\MyVoices\
 echo   El .exe solo NO funciona fuera de esa carpeta.
+echo.
+echo   Para Claude Desktop: usa el boton "Descargar .dxt" en la app y
+echo   configura la carpeta dist\MyVoices\ al instalarlo.
 echo.
 echo   NOTA: El modelo XTTSv2 se descarga automaticamente
 echo         en la primera ejecucion ^(~2 GB, solo una vez^).

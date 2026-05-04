@@ -227,19 +227,29 @@ POST /api/webhooks
 
 MyVoices expone un endpoint [Model Context Protocol](https://modelcontextprotocol.io) para que un LLM (Claude, Cursor, Gemini, ChatGPT…) pueda listar voces, leer texto y disparar frases guardadas vía tool calls.
 
-Hay dos transportes — usa el que mejor le venga a tu cliente:
+Hay tres transportes — usa el que mejor le venga a tu cliente:
 
-### HTTP — integrado en la app (recomendado)
+### .dxt — instalación en un clic para Claude Desktop (recomendado)
+
+1. Arranca MyVoices, ve a la pestaña **Principal → tarjeta 🤖 Servidor MCP** y pulsa **📦 Descargar MyVoices.dxt**.
+2. Arrastra el archivo `MyVoices.dxt` a la ventana de Claude Desktop (o doble clic).
+3. Cuando se solicite, selecciona la carpeta `dist\MyVoices\` (la que contiene `MyVoices.exe` y `mcp_server.exe`).
+
+Claude Desktop lanzará `mcp_server.exe` automáticamente en cada sesión. No requiere token ni edición manual de JSON. El `mcp_server.exe` lo genera `build.bat` y queda en `dist\MyVoices\`.
+
+> **Modo dev:** ejecuta `python make_dxt.py` para generar `MyVoices.dxt` sin compilar todo el bundle. Instálalo igual e indica la carpeta donde tengas un `mcp_server.exe` ya compilado.
+
+### HTTP — integrado en la app (resto de clientes)
 
 1. Abre MyVoices, ve a la pestaña **Principal → tarjeta 🤖 Servidor MCP** y activa el toggle.
 2. La tarjeta muestra la URL (`http://localhost:8000/mcp/`) y un Bearer token (autogenerado en la primera activación).
-3. Abre la pestaña **Ayuda**, elige tu cliente en el selector y copia el snippet de configuración auto-rellenado — URL, token y rutas absolutas vienen ya sustituidos.
+3. Abre la pestaña **Ayuda**, elige tu cliente en el selector y copia el snippet auto-rellenado.
 
 El endpoint queda gateado por el toggle (devuelve `503` si está OFF) y por `Authorization: Bearer <token>` (devuelve `401` si no coincide).
 
 ### stdio — legacy, para clientes sin soporte HTTP
 
-Lanza `python mcp_server.py` como subprocess desde la config de tu cliente. El script solo redirige llamadas a la API REST local, así que la app de MyVoices debe estar abierta.
+Lanza `python mcp_server.py` como subprocess. Requiere Python + el venv de MyVoices. La app debe estar abierta.
 
 ### Tools expuestas
 
@@ -261,6 +271,7 @@ Lanza `python mcp_server.py` como subprocess desde la config de tu cliente. El s
 
 | Cliente | Transport | Dónde va el snippet |
 |---|---|---|
+| Claude Desktop | **.dxt** (recomendado) | Arrastra `MyVoices.dxt` a Claude Desktop |
 | Claude Desktop | HTTP o stdio | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Claude Code (CLI) | HTTP | `claude mcp add myvoices --transport http …` |
 | Cursor | HTTP | `.cursor/mcp.json` (proyecto) o `~/.cursor/mcp.json` (global) |

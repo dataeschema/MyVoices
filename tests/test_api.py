@@ -220,18 +220,17 @@ def test_delete_phrase_not_found(client):
 
 # ── DXT export ────────────────────────────────────────────────────────────────
 
-def test_export_dxt_returns_zip(client, tmp_path, monkeypatch):
-    """GET /api/export/dxt devuelve un ZIP válido con los tres archivos esperados."""
+def test_export_dxt_returns_zip_with_manifest(client, tmp_path, monkeypatch):
+    """GET /api/export/dxt devuelve un ZIP con solo manifest.json."""
+    import json
     import zipfile
 
     import server
 
-    # Crear archivos fuente temporales para simular el entorno de desarrollo
     dxt_dir = tmp_path / "dxt"
     dxt_dir.mkdir()
-    (dxt_dir / "manifest.json").write_text('{"manifest_version":"0.3"}')
-    (tmp_path / "mcp_server.py").write_text("# stub")
-    (tmp_path / "mcp_tools.py").write_text("# stub")
+    manifest_content = '{"manifest_version": "0.3", "name": "myvoices-tts"}'
+    (dxt_dir / "manifest.json").write_text(manifest_content)
 
     monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
 
@@ -241,20 +240,37 @@ def test_export_dxt_returns_zip(client, tmp_path, monkeypatch):
     assert "MyVoices.dxt" in r.headers.get("content-disposition", "")
 
     zf = zipfile.ZipFile(io.BytesIO(r.content))
-    names = zf.namelist()
-    assert "manifest.json" in names
-    assert "mcp_server.py" in names
-    assert "mcp_tools.py" in names
+    # El .dxt solo contiene manifest.json — mcp_server.exe va en dist\MyVoices\
+    assert zf.namelist() == ["manifest.json"]
+    assert json.loads(zf.read("manifest.json"))["name"] == "myvoices-tts"
 
 
-def test_export_dxt_missing_file_returns_500(client, tmp_path, monkeypatch):
-    """Si falta un archivo fuente, el endpoint devuelve 500."""
+def test_export_dxt_manifest_uses_binary_type(client, tmp_path, monkeypatch):
+    """El manifest.json del .dxt usa type:binary y referencia mcp_server.exe."""
+    import json
+    import zipfile
+
     import server
 
-    # dxt/manifest.json existe pero los .py no
     dxt_dir = tmp_path / "dxt"
     dxt_dir.mkdir()
-    (dxt_dir / "manifest.json").write_text('{}')
+    real_manifest = Path(__file__).parent.parent / "dxt" / "manifest.json"
+    (dxt_dir / "manifest.json").write_bytes(real_manifest.read_bytes())
+
+    monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
+
+    r = client.get("/api/export/dxt")
+    assert r.status_code == 200
+
+    manifest = json.loads(zipfile.ZipFile(io.BytesIO(r.content)).read("manifest.json"))
+    assert manifest["server"]["type"] == "binary"
+    assert "mcp_server.exe" in manifest["server"]["mcp_config"]["command"]
+    assert "myvoices_dir" in manifest["user_config"]
+
+
+def test_export_dxt_missing_manifest_returns_500(client, tmp_path, monkeypatch):
+    """Si falta dxt/manifest.json el endpoint devuelve 500."""
+    import server
 
     monkeypatch.setattr(server, "_dxt_source_root", lambda: tmp_path)
 
