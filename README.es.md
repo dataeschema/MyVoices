@@ -2,26 +2,43 @@
 
 **Español** · [English](README.md)
 
-Aplicación de escritorio TTS para streaming. Lee texto con voces clonadas usando **XTTSv2** (GPU/CPU) y **Piper TTS** (ligero, sin GPU). Se integra con SAMMI y otros sistemas vía API REST.
+Aplicación de escritorio TTS para streaming. Lee texto con voces clonadas usando cuatro motores: **XTTSv2**, **Piper TTS**, **F5-TTS** y **Chatterbox TTS**. Se integra con SAMMI y otros sistemas vía API REST y MCP.
 
 ## Características
 
-- **Dos motores TTS**: XTTSv2 (clonación de voz, alta calidad) y Piper TTS (rápido, sin GPU)
+- **Cuatro motores TTS** — elige el equilibrio adecuado para cada voz:
+  - **XTTSv2** — clonación de voz multilingüe (17 idiomas), alta calidad, requiere GPU
+  - **Piper TTS** — voces neuronales de catálogo, sin GPU
+  - **F5-TTS** — clonación desde un WAV de 3-12 s, optimizado para inglés y chino (~3 GB de descarga)
+  - **Chatterbox** — clonación multilingüe (23 idiomas), muy rápido, incluye marca de agua imperceptible
 - **Presets de voz**: combina una voz con velocidad, tono, idioma y efecto de radio; guárdala con un nombre
-- **Idioma por preset**: el idioma XTTS se configura por preset, no globalmente
+- **Idioma por preset**: XTTS y Chatterbox respetan el idioma del preset; F5-TTS funciona mejor en inglés/chino independientemente del preset
 - **API REST simple**: solo `voice` + `text` — sin parámetros técnicos
 - **Frases guardadas**: biblioteca de textos asociados a un preset; reproducibles por nombre vía API; guardar con un nombre ya existente actualiza la frase (upsert)
-- **Descarga de audio**: el botón *Descargar audio* guarda **exactamente el último WAV reproducido** desde una caché en el servidor — sin re-sintetizar
+- **Exportar audio**: sintetiza y descarga en **WAV, MP3 u OGG**; o descarga el último audio reproducido sin re-sintetizar
 - **Pestaña de Ayuda**: diagrama del flujo de trabajo integrado en la app (clonar voz → preset → probar/guardar/API)
 - **Efecto de radio**: bandpass 400–3400 Hz + soft clipping + ruido
 - **Panel de prueba**: selecciona un preset, escucha y descarga el resultado
 - **Splash screen**: barra de progreso animada durante el arranque mientras carga el modelo
-- **Visor de logs**: registro de actividad con auto-refresco, filtros por nivel y origen, y columnas nuevas — caller (MCP/API/UI), preset, vista previa del texto y duración de síntesis
-- **Cola de prioridad**: las peticiones TTS pasan por un `asyncio.PriorityQueue`; las llamadas de MCP/API tienen prioridad sobre las de UI y frases, eliminando deadlocks en el event loop
+- **Visor de logs**: registro de actividad con auto-refresco, filtros por nivel y origen, y columnas — caller (MCP/API/UI), preset, vista previa del texto y duración de síntesis
+- **Cola de prioridad**: las peticiones TTS pasan por un `asyncio.PriorityQueue`; las llamadas de MCP/API tienen prioridad sobre las de UI y frases
 - **Notificaciones por webhook**: registra endpoints HTTP para recibir eventos `speak_end` con voz, texto, caller y duración; gestionables desde la UI
-- **Tests**: 168 tests unitarios e integración (DB, utils, API CRUD, marcado UI, MCP) ejecutables sin GPU
+- **Modo verbose**: activa logging DEBUG + tracebacks completos desde la UI, API o tool MCP; también disponible al arrancar con `MYVOICES_VERBOSE=1`
+- **Endpoint de diagnóstico**: `/api/diagnostics` (y la tool MCP `get_diagnostics`) devuelve disponibilidad por motor, errores de import y versiones de paquetes instalados
+- **Tests**: 206 tests unitarios e integración (DB, utils, API CRUD, marcado UI, MCP) ejecutables sin GPU
 - **CI**: GitHub Actions ejecuta ruff + pytest en cada push y PR
 - **Servidor MCP integrado**: endpoint [Model Context Protocol](https://modelcontextprotocol.io) montado en `/mcp/`, **activable desde la propia UI** y protegido por Bearer token. Permite que un LLM (Claude Desktop, Claude Code, Cursor, Gemini CLI, ChatGPT…) liste voces, hable texto y dispare frases guardadas. Se mantiene también `mcp_server.py` (stdio) para clientes que lo necesiten
+
+---
+
+## Motores TTS de un vistazo
+
+| Motor | Clonación de voz | Idiomas | GPU | Notas |
+|---|---|---|---|---|
+| **XTTSv2** | WAV 10–30 s | 17 | Necesaria para velocidad | Mejor calidad multilingüe |
+| **Piper** | No (voces de catálogo) | Por modelo | No necesaria | El más rápido, menos VRAM |
+| **F5-TTS** | WAV 3–12 s | EN/ZH mejor | ≥12 GB VRAM | Inglés/chino; otros idiomas pueden sonar con acento inglés |
+| **Chatterbox** | WAV 5+ s | 23 | 4–6 GB VRAM | Añade marca de agua imperceptible (Perth/Resemble AI) |
 
 ---
 
@@ -54,14 +71,25 @@ pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url
 #    RTX 40xx / 30xx / 20xx — CUDA 12.4:
 pip install --upgrade --force-reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu124
 
-# 4. Instala el resto de dependencias
+# 4. Instala el resto de dependencias (XTTSv2 + Piper incluidos)
 pip install -r requirements.txt
-
-# 5. Re-fija numpy y networkx (requirements puede subirlas, gruut las necesita antiguas)
-pip install "numpy<2.0.0" "networkx<3.0.0"
 ```
 
-> **Sin GPU**: Piper TTS funciona sin GPU. XTTSv2 es muy lento en CPU.
+### Opcional: F5-TTS y Chatterbox
+
+F5-TTS y Chatterbox no están en `requirements.txt` porque tienen dependencias
+opcionales pesadas. Instálalos solo si los vas a usar:
+
+```bash
+# F5-TTS — requiere >=1.1.20 para evitar conflicto con pydantic
+pip install "f5-tts>=1.1.20"
+
+# Chatterbox — instalar sin deps para evitar conflicto de versión de torch
+pip install chatterbox-tts --no-deps
+pip install resemble-enhance  # mejora de audio usada por Chatterbox
+```
+
+> **Sin GPU**: Piper TTS funciona sin GPU. XTTSv2 es muy lento en CPU. F5-TTS y Chatterbox requieren GPU CUDA.
 
 ---
 
@@ -75,6 +103,7 @@ python main.py
 Al arrancar aparece una **splash screen** con barra de progreso animada mientras se carga el modelo XTTSv2. Una vez listo, se abre la ventana principal.
 
 La primera vez descarga el modelo XTTSv2 (~2 GB) — tarda varios minutos.
+F5-TTS (~3 GB) y Chatterbox (~1-2 GB) se descargan en el primer uso.
 
 Panel web disponible también en: `http://localhost:8000`
 
@@ -88,7 +117,7 @@ pip install -r requirements-dev.txt   # solo la primera vez
 pytest --cov
 ```
 
-168 tests en cinco suites (DB, utils, API CRUD, marcado UI, MCP). No requieren GPU ni modelos descargados (el servidor arranca en modo test sin cargar TTS).
+206 tests en cinco suites (DB, utils, API CRUD, marcado UI, MCP). No requieren GPU ni modelos descargados (el servidor arranca en modo test sin cargar TTS).
 
 ---
 
@@ -105,8 +134,7 @@ El script:
 2. Crea el venv si no existe
 3. **Pregunta qué GPU tienes** (menú 1/2/3) y selecciona la versión CUDA adecuada
 4. Instala PyTorch, `requirements.txt` y PyInstaller automáticamente
-5. Re-fija `numpy<2.0` y `networkx<3.0` tras las dependencias
-6. Compila con PyInstaller
+5. Compila con PyInstaller
 
 El ejecutable final queda en `dist\MyVoices\MyVoices.exe`.
 
@@ -218,7 +246,7 @@ Lanza `python mcp_server.py` como subprocess desde la config de tu cliente. El s
 | Tool | Qué hace |
 |---|---|
 | `get_status` | Estado del servidor: motor TTS, dispositivo, conteos de voces/presets |
-| `list_voices` | Voces registradas (clonadas XTTS + Piper) |
+| `list_voices` | Voces registradas (todos los motores) |
 | `list_presets` | Presets de voz (voz + velocidad/tono/idioma/radio) |
 | `list_phrases` | Frases guardadas con su preset asociado |
 | `speak(voice, text)` | Sintetiza y reproduce `text` con el preset indicado |
@@ -226,7 +254,7 @@ Lanza `python mcp_server.py` como subprocess desde la config de tu cliente. El s
 | `download_last_audio` | Metadatos del último WAV cacheado |
 | `get_logs` | Últimos N logs filtrables por nivel, origen y subcadena |
 | `get_diagnostics` | Estado completo: motores, errores de import, versiones de paquetes |
-| `load_model` | Carga bajo demanda un motor TTS (xtts/f5tts/chatterbox) |
+| `load_model` | Carga bajo demanda un motor TTS (`xtts`/`f5tts`/`chatterbox`) |
 | `set_verbose` | Activa/desactiva modo verbose (DEBUG + tracebacks completos) |
 
 ### Clientes soportados
@@ -258,11 +286,13 @@ curl -X POST http://localhost:8000/mcp/ \
 
 ## Flujo de uso
 
-1. **Tab XTTS2** → sube un WAV de referencia → la voz queda registrada con un ID
+1. **Tab XTTS2** → sube un WAV de referencia (10–30 s) → voz registrada con un ID
 2. **Tab Piper** → descarga una voz del catálogo → se registra automáticamente
-3. **Tab Principal** → selecciona una voz, ajusta velocidad/tono/idioma/radio → guarda como preset
-4. Llama a la API con `{"voice": "nombre_preset", "text": "..."}` desde SAMMI u otro sistema
-5. (Opcional) Registra webhooks en el panel **Webhooks** para recibir eventos `speak_end` en sistemas externos (OBS, Home Assistant, n8n…)
+3. **Tab F5-TTS** → sube un WAV de referencia (3–12 s) → voz registrada (recomendado inglés/chino)
+4. **Tab Chatterbox** → sube un WAV de referencia (5+ s) → voz registrada (23 idiomas)
+5. **Tab Principal** → selecciona una voz, ajusta velocidad/tono/idioma/radio → guarda como preset
+6. Llama a la API con `{"voice": "nombre_preset", "text": "..."}` desde SAMMI u otro sistema
+7. (Opcional) Registra webhooks en el panel **Webhooks** para recibir eventos `speak_end` en sistemas externos (OBS, Home Assistant, n8n…)
 
 La pestaña **Ayuda** dentro de la app contiene el mismo flujo en forma de diagrama visual.
 
@@ -303,7 +333,7 @@ Todos los datos persisten entre actualizaciones en `%APPDATA%\MyVoices\`:
 ```
 %APPDATA%\MyVoices\
 ├── myvoices.db        ← DB con voces, presets, frases y logs
-├── voices\            ← archivos WAV de voces clonadas XTTS
+├── voices\            ← archivos WAV de voces clonadas (XTTS, F5-TTS, Chatterbox)
 └── piper_voices\      ← modelos Piper (.onnx + .onnx.json)
 ```
 
@@ -311,3 +341,6 @@ El modelo XTTSv2 se guarda en:
 ```
 %USERPROFILE%\AppData\Local\tts\tts_models--multilingual--multi-dataset--xtts_v2\
 ```
+
+Los modelos de F5-TTS y Chatterbox se cachean en el directorio por defecto de
+Hugging Face (`%USERPROFILE%\.cache\huggingface\hub\`).
